@@ -2,6 +2,8 @@
 
 How to set up the agent on **claude.ai Projects**. No character limit issues, no manifest schema, no upload script — just paste, upload, and use.
 
+**Coverage:** residential, commercial (structural steel, CFMF, Nichiha/ACM/EIFS/stucco, storefront, TPO/EPDM roofing, commercial MEP, fireproofing), and civil/sitework (paving, storm sewer, utilities, detention ponds, fencing, SWPPP). Agent detects the project type from the plans before pricing.
+
 ---
 
 ## What you need
@@ -63,6 +65,8 @@ Open a new chat in the project and run these in order:
 | 2 | `/scope plumbing` | Pulls from trade-scopes.md. Three sections: Includes / Excludes / Easily Missed. |
 | 3 | `/teach framing` | Six-step walkthrough: sheets to pull, measurements, formulas, waste, common mistakes, sanity check. References blueprint-reading.md. |
 | 4 | `/should-cost roofing — 30 sq gable, 6:12, architectural shingles` | Quantity table with waste shown as a formula, labor hours from production-rates.md, total $. Confidence rating. |
+| 4b | `/should-cost steel — 25 tons of W/HSS commercial frame, 1-story` | Should-cost using commercial steel rates ($4.50/lb erected midpoint), separate labor at $95/hr ironworker. Lists special inspections / weld testing as GC scope. |
+| 4c | `/takeoff` then describe a civil-only project (e.g., truck parking lot, storm sewer) | Agent declares **Civil / Sitework** project type, uses CIVIL section of price-list.md, includes lime stabilization / RCP / manholes / SWPPP. Does NOT mix in residential pricing. |
 | 5 | After running an estimate, type `/easily-missed` | List of items not yet covered, organized by category. References easily-missed.md. |
 | 6 | `/compare-sub electrical` and paste a fake bid | Side-by-side table, scope gaps, double-counts, **HARD VERDICT** tag, recommended action. |
 

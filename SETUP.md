@@ -1,6 +1,8 @@
-# Takeoff Demon — Setup Guide
+# Takeoff Demon — Setup Guide (Microsoft Copilot)
 
-Construction takeoff and cost-estimation agent for Microsoft Copilot. This guide walks you through installing, testing, and customizing the agent.
+Construction takeoff and cost-estimation agent for Microsoft Copilot. Covers residential, commercial (structural steel, CFMF, Nichiha/ACM/EIFS, storefront, TPO/EPDM roofing, commercial MEP), and civil/sitework (paving, storm sewer, detention ponds, SWPPP, fencing). Detects project type before pricing.
+
+> **Heads-up on size:** This agent's instructions are ~31k chars and the full price list lives in knowledge files. Microsoft Copilot may reject the manifest due to size limits. If you hit that, use the **Claude Projects** version instead — see `CLAUDE-SETUP.md`. The Claude version has no size limit and is the recommended path.
 
 ---
 
