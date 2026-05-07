@@ -2,6 +2,10 @@
 
 A Microsoft 365 Copilot **declarative agent** that finds qualified construction subcontractors by trade and location, then exports a clean, structured Excel bid list.
 
+> **New here? Start with [SETUP.md](SETUP.md)** — a step-by-step walkthrough
+> that gets the agents into Copilot in about 10 minutes. The README below
+> is the technical reference; SETUP.md is the manual.
+
 ## What it does
 
 Given a trade (electrical, plumbing, HVAC, framing, etc.) and a project location, the agent:
