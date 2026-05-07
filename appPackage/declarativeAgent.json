@@ -1,15 +1,22 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
-  "version": "v1.2",
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.3/schema.json",
+  "version": "v1.3",
   "name": "Subcontractor Finder",
   "description": "Finds qualified construction subcontractors by trade and location, then exports a clean Excel sheet you can drop straight into a bid package.",
   "instructions": "$[file('instructions.txt')]",
   "capabilities": [
-    { "name": "WebSearch" },
-    { "name": "CodeInterpreter" }
+    {
+      "name": "WebSearch"
+    },
+    {
+      "name": "CodeInterpreter"
+    }
   ],
   "actions": [
-    { "id": "subcontractor-crm", "file": "plugins/crm-plugin.json" }
+    {
+      "id": "subcontractor-crm",
+      "file": "plugins/crm-plugin.json"
+    }
   ],
   "conversation_starters": [
     {

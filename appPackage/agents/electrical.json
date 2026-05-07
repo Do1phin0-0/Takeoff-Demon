@@ -1,6 +1,6 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
-  "version": "v1.2",
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.3/schema.json",
+  "version": "v1.3",
   "name": "Subcontractor Finder \u2014 Electrical",
   "description": "Specialist agent for finding licensed electrical subcontractors. Knows state license classifications and exports a bid-ready Excel sheet with a Voltage Class column.",
   "instructions": "$[file('agents/electrical.instructions.txt')]",

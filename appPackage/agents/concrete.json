@@ -1,6 +1,6 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
-  "version": "v1.2",
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.3/schema.json",
+  "version": "v1.3",
   "name": "Subcontractor Finder \u2014 Concrete",
   "description": "Specialist agent for finding concrete and masonry subcontractors. Tracks scope (flatwork, structural, tilt-up) and equipment capability.",
   "instructions": "$[file('agents/concrete.instructions.txt')]",

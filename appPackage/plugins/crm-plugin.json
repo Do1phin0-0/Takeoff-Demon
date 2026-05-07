@@ -1,13 +1,13 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/copilot/plugin/v2.1/schema.json",
-  "schema_version": "v2.1",
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/plugin/v2.2/schema.json",
+  "schema_version": "v2.2",
   "name_for_human": "Subcontractor CRM",
-  "description_for_human": "Search the user's subcontractor roster by trade and location, and update bid status from inside Copilot.",
+  "description_for_human": "Search your subcontractor roster and update bid status from Copilot.",
   "namespace": "subcontractorcrm",
   "functions": [
     {
       "name": "searchSubcontractors",
-      "description": "Search the user's CRM for subcontractors that match a trade and project location. ALWAYS call this BEFORE running a web search — these are the user's known, previously-vetted subs. Required: trade. Recommended: state and city. Combine with radius_miles to filter by service area. Returns up to 100 rows.",
+      "description": "Search the user's CRM for subcontractors that match a trade and project location. ALWAYS call this BEFORE running a web search \u2014 these are the user's known, previously-vetted subs. Required: trade. Recommended: state and city. Combine with radius_miles to filter by service area. Returns up to 100 rows.",
       "capabilities": {
         "response_semantics": {
           "data_path": "$.results",
@@ -25,7 +25,7 @@
     },
     {
       "name": "updateBidStatus",
-      "description": "Update a subcontractor's bid status, bid amount, and/or notes. Call this when the user says things like 'mark all as bid sent', 'set the awarded sub to ABC Plumbing for $42,500', or 'add a note that they declined'. Do NOT call this on a row whose id you only inferred — only on ids returned by searchSubcontractors or getSubcontractor."
+      "description": "Update a subcontractor's bid status, bid amount, and/or notes. Call this when the user says things like 'mark all as bid sent', 'set the awarded sub to ABC Plumbing for $42,500', or 'add a note that they declined'. Do NOT call this on a row whose id you only inferred \u2014 only on ids returned by searchSubcontractors or getSubcontractor."
     }
   ],
   "runtimes": [
@@ -33,7 +33,7 @@
       "type": "OpenApi",
       "auth": {
         "type": "ApiKeyPluginVault",
-        "reference_id": "REPLACE_WITH_VAULT_REFERENCE_ID"
+        "reference_id": "00000000-0000-0000-0000-000000000000"
       },
       "spec": {
         "url": "plugins/crm-openapi.yaml"

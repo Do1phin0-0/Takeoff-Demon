@@ -1,6 +1,6 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
-  "version": "v1.2",
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.3/schema.json",
+  "version": "v1.3",
   "name": "Subcontractor Finder \u2014 HVAC",
   "description": "Specialist agent for finding licensed HVAC / mechanical subcontractors. Tracks state license, EPA 608 certification, and tonnage / system-type fit.",
   "instructions": "$[file('agents/hvac.instructions.txt')]",

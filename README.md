@@ -79,24 +79,55 @@ Each specialist knows its own state license boards (CSLB / TDLR / ROC / CILB / e
 
 No custom API plugin or hosted backend is required.
 
-## Build & deploy
+## Build & import into Copilot Agent Maker
 
-1. Add `color.png` (192x192) and `outline.png` (32x32, transparent) to `appPackage/`.
-2. Replace the `id` GUID in `manifest.json` if you want a fresh app identity.
-3. Zip the `appPackage/` directory contents (not the folder itself):
+1. Stand up the CRM API somewhere with HTTPS (see `server/README.md`) and
+   register the API key in **Teams Developer Portal → API key auth**. Copy
+   the resulting GUID.
+2. Replace the two placeholders the validator warns about:
+   - `appPackage/plugins/crm-openapi.yaml` → `servers[0].url`
+   - `appPackage/plugins/crm-plugin.json` → `runtimes[0].auth.reference_id`
+3. Build the upload zip:
    ```
-   cd appPackage && zip ../subcontractor-finder.zip *
+   ./build.sh
    ```
-4. Upload to your tenant via the **Microsoft 365 Admin Center → Integrated apps**, or sideload through **Teams → Apps → Manage your apps → Upload an app**.
-5. Open Microsoft 365 Copilot, select **Subcontractor Finder** from the agents list, and try a conversation starter.
+   This validates schemas, GUIDs, icon dimensions, field length limits, and
+   dangling file references before zipping to `dist/subcontractor-finder.zip`.
+4. Import into Copilot Agent Maker — three paths:
+   - **Microsoft 365 Copilot → Agents → Build an agent → Import** — upload the zip directly.
+   - **Microsoft 365 Admin Center → Integrated apps → Upload custom apps** — for tenant-wide rollout.
+   - **Teams → Apps → Manage your apps → Upload an app** — sideload for testing.
+5. Open Copilot, pick **Subcontractor Finder** (or any specialist), and try a
+   conversation starter.
 
 ## Local validation
 
-Validate the manifest against the official schema before packaging:
+```
+python3 scripts/validate_package.py
+```
 
+Catches the issues that break Agent Maker uploads: bad/missing GUIDs, wrong
+icon sizes, schema-version drift, oversized fields, dangling file references,
+and unreplaced placeholders. `build.sh` runs this automatically before
+zipping.
+
+For deeper schema validation against Microsoft's official schemas:
 ```
 npx @microsoft/teams-manifest validate appPackage/manifest.json
 ```
+
+## Compliance summary
+
+| Item | Value |
+|---|---|
+| Teams app manifest schema | `v1.22` |
+| Declarative agent schema  | `v1.3` |
+| API plugin schema         | `v2.2` |
+| OpenAPI version           | `3.0.3` (3.1 not supported by M365 plugins) |
+| Plugin auth               | `ApiKeyPluginVault` (header `X-Api-Key`) |
+| Icons                     | `color.png` 192x192, `outline.png` 32x32 |
+| Conversation starters     | ≤ 6 per agent (current max is 4) |
+| Plugin functions          | 3 of 10 max |
 
 ## Customizing
 

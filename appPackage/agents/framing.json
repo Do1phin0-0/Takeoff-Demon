@@ -1,6 +1,6 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
-  "version": "v1.2",
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.3/schema.json",
+  "version": "v1.3",
   "name": "Subcontractor Finder \u2014 Framing",
   "description": "Specialist agent for finding rough-carpentry / framing subcontractors (wood and light-gauge metal). Tracks crew size and system type.",
   "instructions": "$[file('agents/framing.instructions.txt')]",

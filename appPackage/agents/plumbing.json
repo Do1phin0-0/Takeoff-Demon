@@ -1,6 +1,6 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
-  "version": "v1.2",
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.3/schema.json",
+  "version": "v1.3",
   "name": "Subcontractor Finder \u2014 Plumbing",
   "description": "Specialist agent for finding licensed plumbing subcontractors. Tracks master plumber license, backflow certification, and medical-gas endorsement.",
   "instructions": "$[file('agents/plumbing.instructions.txt')]",

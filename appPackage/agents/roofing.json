@@ -1,6 +1,6 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
-  "version": "v1.2",
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.3/schema.json",
+  "version": "v1.3",
   "name": "Subcontractor Finder \u2014 Roofing",
   "description": "Specialist agent for finding roofing subcontractors. Tracks system type (TPO, EPDM, mod bit, shingle, metal) and manufacturer certifications.",
   "instructions": "$[file('agents/roofing.instructions.txt')]",
