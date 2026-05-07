@@ -1,12 +1,16 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
   "version": "v1.2",
-  "name": "Subcontractor Finder — HVAC",
+  "name": "Subcontractor Finder \u2014 HVAC",
   "description": "Specialist agent for finding licensed HVAC / mechanical subcontractors. Tracks state license, EPA 608 certification, and tonnage / system-type fit.",
   "instructions": "$[file('agents/hvac.instructions.txt')]",
   "capabilities": [
-    { "name": "WebSearch" },
-    { "name": "CodeInterpreter" }
+    {
+      "name": "WebSearch"
+    },
+    {
+      "name": "CodeInterpreter"
+    }
   ],
   "conversation_starters": [
     {
@@ -20,6 +24,12 @@
     {
       "title": "Service & controls",
       "text": "Need HVAC subs in Denver, CO with BAS / DDC controls capability for a school renovation."
+    }
+  ],
+  "actions": [
+    {
+      "id": "subcontractor-crm",
+      "file": "plugins/crm-plugin.json"
     }
   ]
 }

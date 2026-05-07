@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Local CRM data
+server/*.sqlite
+server/.env
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+
+# Build artifacts
+*.zip

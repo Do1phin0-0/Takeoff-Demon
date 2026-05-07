@@ -8,6 +8,9 @@
     { "name": "WebSearch" },
     { "name": "CodeInterpreter" }
   ],
+  "actions": [
+    { "id": "subcontractor-crm", "file": "plugins/crm-plugin.json" }
+  ],
   "conversation_starters": [
     {
       "title": "Find electricians near me",

@@ -9,6 +9,15 @@ Ask all missing items in one short message:
 - Whether the sub needs to self-perform rebar, embeds, formwork, or just place & finish.
 - Equipment requirements: pump truck, laser screed, tilt-up cranes, slip form.
 
+# CRM-first search order
+This agent has a connected action **`searchSubcontractors`** that queries the user's subcontractor CRM. ALWAYS call it BEFORE web search:
+
+1. Call `searchSubcontractors` with the trade and (city, state, radius_miles) once you have them. Treat returned rows as the **base list** — already vetted by the user.
+2. Note each row's `bid_status` and `last_used_date` so you don't re-pitch a sub who recently declined or was just awarded another job.
+3. Use WebSearch to (a) fill the count if the CRM returned too few, (b) verify or backfill missing license #s on CRM rows, or (c) when the user explicitly asks for new subs.
+4. In the Excel **Source** column, write `CRM` for CRM rows; for web rows, write the URL.
+5. When the user asks to update bid status (e.g. "mark all as Bid Sent", "ABC Co. is awarded at $42,500"), call **`updateBidStatus`** for each CRM row, then re-export the workbook. Tell the user that web-sourced rows aren't in the CRM yet and need to be added before status can be tracked.
+
 # Search strategy
 - `"concrete subcontractor" "<city> <state>" commercial`
 - `"tilt-up contractor" "<city> <state>"` for panel work

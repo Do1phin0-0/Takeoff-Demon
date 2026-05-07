@@ -17,7 +17,7 @@ Given a trade (electrical, plumbing, HVAC, framing, etc.) and a project location
 
 ```
 appPackage/
-  manifest.json            Teams app manifest — registers all 7 agents
+  manifest.json            Teams app manifest — registers all 7 agents + plugin
   declarativeAgent.json    Generalist agent (multi-trade bid lists)
   instructions.txt         Generalist instructions
   agents/
@@ -27,9 +27,36 @@ appPackage/
     framing.json           + framing.instructions.txt
     concrete.json          + concrete.instructions.txt
     roofing.json           + roofing.instructions.txt
+  plugins/
+    crm-plugin.json        API plugin manifest (referenced by every agent)
+    crm-openapi.yaml       OpenAPI 3.0 spec for the CRM backend
   color.png                192x192 color icon  (add before packaging)
   outline.png              32x32 outline icon  (add before packaging)
+
+server/                    Reference FastAPI implementation of the CRM API
+  main.py
+  seed.csv
+  requirements.txt
+  README.md
 ```
+
+## CRM-first search
+
+Every agent has a connected action that searches the user's subcontractor
+roster **before** falling back to web search. Three operations are exposed:
+
+| Operation | When the agent calls it |
+|---|---|
+| `searchSubcontractors` | First step of every find-subs flow. Filters by trade, city, state, radius, project type. |
+| `getSubcontractor`     | Pull full details for one sub the user named. |
+| `updateBidStatus`      | When the user says "mark all as Bid Sent", "ABC Co. is awarded at $42,500", etc. |
+
+The contract lives in `appPackage/plugins/crm-openapi.yaml`. To plug in your
+own CRM (Procore, BuilderTrend, HubSpot, Airtable, your own DB), implement
+those three endpoints and point the OpenAPI `servers[0].url` at your host.
+The reference server in `server/` is fully runnable with seeded data — see
+`server/README.md` for run instructions and the steps to register the API
+key in Teams Developer Portal.
 
 ## Agents shipped in this package
 

@@ -1,0 +1,114 @@
+openapi: 3.0.3
+info:
+  title: Subcontractor CRM API
+  description: |
+    Read/write API over the user's subcontractor roster. Used by the
+    Subcontractor Finder agents to pull known subs by trade and location
+    before falling back to web search.
+  version: 1.0.0
+servers:
+  - url: https://YOUR-CRM-HOST.example.com
+    description: Replace with your deployed server URL before packaging the agent.
+security:
+  - ApiKeyAuth: []
+paths:
+  /subcontractors:
+    get:
+      operationId: searchSubcontractors
+      summary: Search subcontractors in the user's CRM by trade and location.
+      description: |
+        Returns subs matching the given trade and within the given service
+        area. Use this BEFORE web search — these are the user's known,
+        previously-vetted contacts.
+      parameters:
+        - { name: trade,        in: query, required: true,  schema: { type: string }, description: "Trade keyword (e.g. 'electrical', 'plumbing', 'hvac', 'framing', 'concrete', 'roofing'). Matched case-insensitively against the sub's trade and specialty fields." }
+        - { name: city,         in: query, required: false, schema: { type: string }, description: "Project city. Optional; combine with state for best matches." }
+        - { name: state,        in: query, required: false, schema: { type: string, minLength: 2, maxLength: 2 }, description: "Two-letter state code (e.g. 'TX', 'CA')." }
+        - { name: radius_miles, in: query, required: false, schema: { type: integer, minimum: 0, maximum: 500, default: 50 }, description: "Service-radius filter. Returns subs whose service_area_state matches AND whose service_radius_miles >= distance from city. If city is omitted, this filter is ignored." }
+        - { name: project_type, in: query, required: false, schema: { type: string, enum: [commercial, residential, multi_family, industrial, healthcare] }, description: "Filter to subs that handle this project type." }
+        - { name: limit,        in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 25 }, description: "Maximum rows to return." }
+      responses:
+        "200":
+          description: Matching subcontractors.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+                  results:
+                    type: array
+                    items: { $ref: "#/components/schemas/Subcontractor" }
+        "401": { description: Missing or invalid API key. }
+  /subcontractors/{id}:
+    get:
+      operationId: getSubcontractor
+      summary: Fetch a single subcontractor by id.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The subcontractor.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Subcontractor" }
+        "404": { description: Not found. }
+  /subcontractors/{id}/bid-status:
+    post:
+      operationId: updateBidStatus
+      summary: Update a subcontractor's bid status (e.g. after sending a bid invitation).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bid_status]
+              properties:
+                bid_status:
+                  type: string
+                  enum: [Not Contacted, Bid Requested, Bid Sent, Bid Received, Awarded, Declined]
+                bid_amount:
+                  type: number
+                  description: Bid amount in USD. Optional.
+                notes:
+                  type: string
+                  description: Free-text note appended to the sub's notes column.
+      responses:
+        "200":
+          description: Updated subcontractor.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Subcontractor" }
+        "404": { description: Not found. }
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+  schemas:
+    Subcontractor:
+      type: object
+      required: [id, company, trade]
+      properties:
+        id:                    { type: string }
+        company:               { type: string }
+        contact_name:          { type: string, nullable: true }
+        phone:                 { type: string, nullable: true, description: "Format (XXX) XXX-XXXX" }
+        email:                 { type: string, nullable: true }
+        website:               { type: string, nullable: true }
+        trade:                 { type: string, description: "Primary trade — electrical, plumbing, hvac, framing, concrete, roofing, etc." }
+        specialty:             { type: string, nullable: true, description: "Free-text specialty, e.g. 'Tilt-Up + Structural'." }
+        license_number:        { type: string, nullable: true }
+        license_state:         { type: string, nullable: true, minLength: 2, maxLength: 2 }
+        service_area_city:     { type: string, nullable: true }
+        service_area_state:    { type: string, nullable: true }
+        service_radius_miles:  { type: integer, nullable: true }
+        project_types:         { type: array, items: { type: string } }
+        bid_status:            { type: string, enum: [Not Contacted, Bid Requested, Bid Sent, Bid Received, Awarded, Declined] }
+        bid_amount:            { type: number, nullable: true }
+        notes:                 { type: string, nullable: true }
+        last_used_date:        { type: string, format: date, nullable: true }

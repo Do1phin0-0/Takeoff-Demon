@@ -1,12 +1,16 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
   "version": "v1.2",
-  "name": "Subcontractor Finder — Plumbing",
+  "name": "Subcontractor Finder \u2014 Plumbing",
   "description": "Specialist agent for finding licensed plumbing subcontractors. Tracks master plumber license, backflow certification, and medical-gas endorsement.",
   "instructions": "$[file('agents/plumbing.instructions.txt')]",
   "capabilities": [
-    { "name": "WebSearch" },
-    { "name": "CodeInterpreter" }
+    {
+      "name": "WebSearch"
+    },
+    {
+      "name": "CodeInterpreter"
+    }
   ],
   "conversation_starters": [
     {
@@ -20,6 +24,12 @@
     {
       "title": "Backflow + service",
       "text": "Need plumbing subs in San Diego with current backflow certification for a restaurant TI."
+    }
+  ],
+  "actions": [
+    {
+      "id": "subcontractor-crm",
+      "file": "plugins/crm-plugin.json"
     }
   ]
 }

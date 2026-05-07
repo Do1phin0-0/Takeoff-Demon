@@ -1,12 +1,16 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
   "version": "v1.2",
-  "name": "Subcontractor Finder — Concrete",
+  "name": "Subcontractor Finder \u2014 Concrete",
   "description": "Specialist agent for finding concrete and masonry subcontractors. Tracks scope (flatwork, structural, tilt-up) and equipment capability.",
   "instructions": "$[file('agents/concrete.instructions.txt')]",
   "capabilities": [
-    { "name": "WebSearch" },
-    { "name": "CodeInterpreter" }
+    {
+      "name": "WebSearch"
+    },
+    {
+      "name": "CodeInterpreter"
+    }
   ],
   "conversation_starters": [
     {
@@ -15,11 +19,17 @@
     },
     {
       "title": "Slab-on-grade flatwork",
-      "text": "Find SOG flatwork subs in Phoenix, AZ for a retail center — need pump truck + laser screed."
+      "text": "Find SOG flatwork subs in Phoenix, AZ for a retail center \u2014 need pump truck + laser screed."
     },
     {
       "title": "Structural concrete + rebar",
       "text": "Find concrete subs in Atlanta, GA who self-perform rebar for a parking deck."
+    }
+  ],
+  "actions": [
+    {
+      "id": "subcontractor-crm",
+      "file": "plugins/crm-plugin.json"
     }
   ]
 }

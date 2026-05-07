@@ -1,12 +1,16 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
   "version": "v1.2",
-  "name": "Subcontractor Finder — Electrical",
+  "name": "Subcontractor Finder \u2014 Electrical",
   "description": "Specialist agent for finding licensed electrical subcontractors. Knows state license classifications and exports a bid-ready Excel sheet with a Voltage Class column.",
   "instructions": "$[file('agents/electrical.instructions.txt')]",
   "capabilities": [
-    { "name": "WebSearch" },
-    { "name": "CodeInterpreter" }
+    {
+      "name": "WebSearch"
+    },
+    {
+      "name": "CodeInterpreter"
+    }
   ],
   "conversation_starters": [
     {
@@ -20,6 +24,12 @@
     {
       "title": "Industrial / medium voltage",
       "text": "Find electrical subs in Houston, TX who can handle 480V 3-phase and switchgear work."
+    }
+  ],
+  "actions": [
+    {
+      "id": "subcontractor-crm",
+      "file": "plugins/crm-plugin.json"
     }
   ]
 }

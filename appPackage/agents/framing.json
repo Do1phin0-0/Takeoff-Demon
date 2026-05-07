@@ -1,12 +1,16 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
   "version": "v1.2",
-  "name": "Subcontractor Finder — Framing",
+  "name": "Subcontractor Finder \u2014 Framing",
   "description": "Specialist agent for finding rough-carpentry / framing subcontractors (wood and light-gauge metal). Tracks crew size and system type.",
   "instructions": "$[file('agents/framing.instructions.txt')]",
   "capabilities": [
-    { "name": "WebSearch" },
-    { "name": "CodeInterpreter" }
+    {
+      "name": "WebSearch"
+    },
+    {
+      "name": "CodeInterpreter"
+    }
   ],
   "conversation_starters": [
     {
@@ -20,6 +24,12 @@
     {
       "title": "Production homebuilders",
       "text": "Find production framers in Phoenix, AZ doing 500+ homes/year."
+    }
+  ],
+  "actions": [
+    {
+      "id": "subcontractor-crm",
+      "file": "plugins/crm-plugin.json"
     }
   ]
 }
