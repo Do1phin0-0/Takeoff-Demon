@@ -1,0 +1,25 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
+  "version": "v1.2",
+  "name": "Subcontractor Finder — Electrical",
+  "description": "Specialist agent for finding licensed electrical subcontractors. Knows state license classifications and exports a bid-ready Excel sheet with a Voltage Class column.",
+  "instructions": "$[file('agents/electrical.instructions.txt')]",
+  "capabilities": [
+    { "name": "WebSearch" },
+    { "name": "CodeInterpreter" }
+  ],
+  "conversation_starters": [
+    {
+      "title": "Commercial electricians in Dallas",
+      "text": "Find 10 licensed commercial electrical subs within 50 miles of Dallas, TX for a 40,000 sq ft office TI. Verify TDLR licenses."
+    },
+    {
+      "title": "Service & low-voltage subs",
+      "text": "I need low-voltage / data subs in Phoenix, AZ. Pull AZ ROC L-11 license holders and export."
+    },
+    {
+      "title": "Industrial / medium voltage",
+      "text": "Find electrical subs in Houston, TX who can handle 480V 3-phase and switchgear work."
+    }
+  ]
+}

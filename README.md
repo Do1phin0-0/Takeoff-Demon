@@ -17,12 +17,33 @@ Given a trade (electrical, plumbing, HVAC, framing, etc.) and a project location
 
 ```
 appPackage/
-  manifest.json            Teams app manifest (M365 Copilot host)
-  declarativeAgent.json    Agent definition (capabilities, starters)
-  instructions.txt         The agent's system instructions / behavior
+  manifest.json            Teams app manifest — registers all 7 agents
+  declarativeAgent.json    Generalist agent (multi-trade bid lists)
+  instructions.txt         Generalist instructions
+  agents/
+    electrical.json        + electrical.instructions.txt
+    plumbing.json          + plumbing.instructions.txt
+    hvac.json              + hvac.instructions.txt
+    framing.json           + framing.instructions.txt
+    concrete.json          + concrete.instructions.txt
+    roofing.json           + roofing.instructions.txt
   color.png                192x192 color icon  (add before packaging)
   outline.png              32x32 outline icon  (add before packaging)
 ```
+
+## Agents shipped in this package
+
+| Agent | When to pick it | Trade-specific Excel column(s) |
+|---|---|---|
+| Subcontractor Finder | Multi-trade bid lists, or when you don't know the trade yet | — |
+| Electrical | Power, low-voltage, controls | Voltage Class |
+| Plumbing | Plumbing, gas, medical-gas, backflow | Backflow / Med-Gas Cert |
+| HVAC | Mechanical, controls, refrigeration | System Types + EPA 608 |
+| Framing | Wood + light-gauge metal stud | System Type + Crew Size |
+| Concrete | Flatwork, structural, tilt-up | Scope Capabilities + Equipment |
+| Roofing | Low-slope, steep-slope, metal | System Types + Manufacturer Certs |
+
+Each specialist knows its own state license boards (CSLB / TDLR / ROC / CILB / etc.) and trade-specific verification rules.
 
 ## Capabilities used
 

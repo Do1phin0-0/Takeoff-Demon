@@ -1,0 +1,25 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
+  "version": "v1.2",
+  "name": "Subcontractor Finder — Plumbing",
+  "description": "Specialist agent for finding licensed plumbing subcontractors. Tracks master plumber license, backflow certification, and medical-gas endorsement.",
+  "instructions": "$[file('agents/plumbing.instructions.txt')]",
+  "capabilities": [
+    { "name": "WebSearch" },
+    { "name": "CodeInterpreter" }
+  ],
+  "conversation_starters": [
+    {
+      "title": "Multi-family plumbing subs",
+      "text": "Find 10 plumbing subs in Phoenix, AZ for a 120-unit multi-family build. Need ROC L-37 holders."
+    },
+    {
+      "title": "Medical-gas qualified",
+      "text": "Find plumbing subs in Houston, TX with medical-gas endorsement for a clinic build-out."
+    },
+    {
+      "title": "Backflow + service",
+      "text": "Need plumbing subs in San Diego with current backflow certification for a restaurant TI."
+    }
+  ]
+}

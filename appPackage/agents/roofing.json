@@ -1,0 +1,25 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
+  "version": "v1.2",
+  "name": "Subcontractor Finder — Roofing",
+  "description": "Specialist agent for finding roofing subcontractors. Tracks system type (TPO, EPDM, mod bit, shingle, metal) and manufacturer certifications.",
+  "instructions": "$[file('agents/roofing.instructions.txt')]",
+  "capabilities": [
+    { "name": "WebSearch" },
+    { "name": "CodeInterpreter" }
+  ],
+  "conversation_starters": [
+    {
+      "title": "TPO commercial roofing",
+      "text": "Find 10 TPO roofing subs in Atlanta, GA for a 80,000 sq ft retail roof. Need Carlisle or GAF certified."
+    },
+    {
+      "title": "Standing-seam metal",
+      "text": "Find standing-seam metal roofing subs in Denver, CO for a school project."
+    },
+    {
+      "title": "Mod bit + repair",
+      "text": "Find mod-bit / built-up roofing subs in Phoenix, AZ with 24/7 service capability."
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
+  "version": "v1.2",
+  "name": "Subcontractor Finder — HVAC",
+  "description": "Specialist agent for finding licensed HVAC / mechanical subcontractors. Tracks state license, EPA 608 certification, and tonnage / system-type fit.",
+  "instructions": "$[file('agents/hvac.instructions.txt')]",
+  "capabilities": [
+    { "name": "WebSearch" },
+    { "name": "CodeInterpreter" }
+  ],
+  "conversation_starters": [
+    {
+      "title": "Commercial RTU subs",
+      "text": "Find 10 HVAC subs in Atlanta, GA who can install (8) 20-ton rooftop units on a retail build."
+    },
+    {
+      "title": "VRF-experienced subs",
+      "text": "Find HVAC subs in Seattle, WA with documented VRF experience for a 60,000 sq ft office."
+    },
+    {
+      "title": "Service & controls",
+      "text": "Need HVAC subs in Denver, CO with BAS / DDC controls capability for a school renovation."
+    }
+  ]
+}

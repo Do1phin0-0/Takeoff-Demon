@@ -24,10 +24,13 @@
   "accentColor": "#1F3A5F",
   "copilotAgents": {
     "declarativeAgents": [
-      {
-        "id": "subcontractor-finder",
-        "file": "declarativeAgent.json"
-      }
+      { "id": "subcontractor-finder",            "file": "declarativeAgent.json" },
+      { "id": "subcontractor-finder-electrical", "file": "agents/electrical.json" },
+      { "id": "subcontractor-finder-plumbing",   "file": "agents/plumbing.json" },
+      { "id": "subcontractor-finder-hvac",       "file": "agents/hvac.json" },
+      { "id": "subcontractor-finder-framing",    "file": "agents/framing.json" },
+      { "id": "subcontractor-finder-concrete",   "file": "agents/concrete.json" },
+      { "id": "subcontractor-finder-roofing",    "file": "agents/roofing.json" }
     ]
   },
   "permissions": ["identity", "messageTeamMembers"],
