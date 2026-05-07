@@ -1,0 +1,35 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.19/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.19",
+  "version": "1.0.0",
+  "id": "8a101552-a8a5-4c03-896f-d07ec4f4da2a",
+  "developer": {
+    "name": "Takeoff Demon",
+    "websiteUrl": "https://example.com",
+    "privacyUrl": "https://example.com/privacy",
+    "termsOfUseUrl": "https://example.com/terms"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "name": {
+    "short": "Subcontractor Finder",
+    "full": "Takeoff Demon Subcontractor Finder"
+  },
+  "description": {
+    "short": "Finds subs by trade and location, exports to Excel.",
+    "full": "A Microsoft 365 Copilot agent that searches the web for qualified construction subcontractors by trade and project location, verifies license info where possible, and exports a clean Excel bid list."
+  },
+  "accentColor": "#1F3A5F",
+  "copilotAgents": {
+    "declarativeAgents": [
+      {
+        "id": "subcontractor-finder",
+        "file": "declarativeAgent.json"
+      }
+    ]
+  },
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": []
+}

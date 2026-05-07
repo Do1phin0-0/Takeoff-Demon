@@ -1,0 +1,29 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.2/schema.json",
+  "version": "v1.2",
+  "name": "Subcontractor Finder",
+  "description": "Finds qualified construction subcontractors by trade and location, then exports a clean Excel sheet you can drop straight into a bid package.",
+  "instructions": "$[file('instructions.txt')]",
+  "capabilities": [
+    { "name": "WebSearch" },
+    { "name": "CodeInterpreter" }
+  ],
+  "conversation_starters": [
+    {
+      "title": "Find electricians near me",
+      "text": "Find 10 licensed commercial electrical subcontractors within 50 miles of Dallas, TX and export to Excel."
+    },
+    {
+      "title": "Plumbing subs for a remodel",
+      "text": "I need plumbing subs for a multi-family remodel in Phoenix, AZ. Pull at least 8 with license numbers and export."
+    },
+    {
+      "title": "Multi-trade bid list",
+      "text": "Build a bid list for framing, drywall, and HVAC subs in Denver, CO. One Excel file, one tab per trade."
+    },
+    {
+      "title": "Update bid status",
+      "text": "Re-export my last list with bid status set to 'Bid Sent' for everyone and a notes column ready to fill in."
+    }
+  ]
+}
