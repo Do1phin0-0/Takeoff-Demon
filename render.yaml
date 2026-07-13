@@ -9,6 +9,8 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
+      - key: ANTHROPIC_API_KEY
+        sync: false
     disk:
       name: uploads
       mountPath: /opt/render/project/src/uploads

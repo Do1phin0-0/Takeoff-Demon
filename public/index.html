@@ -13,9 +13,13 @@
       input[type="file"] { padding: 0.5rem; border: 1px dashed #888; border-radius: 6px; }
       button { padding: 0.6rem 1rem; font-size: 1rem; cursor: pointer; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff; }
       button:disabled { opacity: 0.6; cursor: not-allowed; }
-      #result { margin-top: 1.5rem; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 0.85rem; }
-      .ok { color: #1a7f37; }
-      .err { color: #b91c1c; }
+      #result { margin-top: 1.5rem; }
+      .err { color: #b91c1c; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+      .file-card { border: 1px solid #444; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+      .file-card h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+      .file-meta { color: #666; font-size: 0.8rem; margin-bottom: 0.75rem; }
+      .analysis { white-space: pre-wrap; font-size: 0.9rem; }
+      .analysis.skipped, .analysis.error { color: #b45309; font-style: italic; }
     </style>
   </head>
   <body>
@@ -23,6 +27,7 @@
     <p class="hint">
       Upload blueprints or photos. Accepts PDF, PNG, JPG, WebP, TIFF, DWG, DXF.
       Max 100 MB per file, up to 20 files at once.
+      PDF, PNG, JPG, and WebP files under 30 MB get an automatic AI takeoff summary.
     </p>
     <form id="form">
       <input
@@ -50,8 +55,8 @@
         for (const f of input.files) data.append("files", f);
 
         submit.disabled = true;
-        result.textContent = "Uploading...";
         result.className = "";
+        result.textContent = "Uploading and analyzing...";
         try {
           const res = await fetch("/upload", { method: "POST", body: data });
           const body = await res.json();
@@ -59,15 +64,32 @@
             result.className = "err";
             result.textContent = `Error: ${body.error || res.statusText}`;
           } else {
-            result.className = "ok";
-            result.textContent =
-              `Uploaded ${body.uploaded.length} file(s):\n` +
-              body.uploaded
-                .map(
-                  (f) =>
-                    `  ${f.originalName}  (${(f.size / 1024 / 1024).toFixed(2)} MB)`
-                )
-                .join("\n");
+            result.innerHTML = "";
+            for (const f of body.uploaded) {
+              const card = document.createElement("div");
+              card.className = "file-card";
+
+              const title = document.createElement("h3");
+              title.textContent = f.originalName;
+              card.appendChild(title);
+
+              const meta = document.createElement("div");
+              meta.className = "file-meta";
+              meta.textContent = `${(f.size / 1024 / 1024).toFixed(2)} MB`;
+              card.appendChild(meta);
+
+              const analysis = document.createElement("div");
+              if (f.analysis.status === "ok") {
+                analysis.className = "analysis";
+                analysis.textContent = f.analysis.text;
+              } else {
+                analysis.className = `analysis ${f.analysis.status}`;
+                analysis.textContent = f.analysis.reason;
+              }
+              card.appendChild(analysis);
+
+              result.appendChild(card);
+            }
           }
         } catch (err) {
           result.className = "err";
