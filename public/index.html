@@ -64,9 +64,15 @@
 
         const fileList = document.createElement("div");
         fileList.className = "file-list";
-        fileList.textContent = batch.files
-          .map((f) => `${f.originalName} (${(f.size / 1024 / 1024).toFixed(2)} MB)`)
-          .join(" · ");
+        batch.files.forEach((f, i) => {
+          if (i > 0) fileList.appendChild(document.createTextNode(" · "));
+          const link = document.createElement("a");
+          link.href = `/files/${encodeURIComponent(batch.id)}/${encodeURIComponent(f.storedName)}`;
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.textContent = `${f.originalName} (${(f.size / 1024 / 1024).toFixed(2)} MB)`;
+          fileList.appendChild(link);
+        });
         card.appendChild(fileList);
 
         const analysis = document.createElement("div");

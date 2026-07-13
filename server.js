@@ -13,7 +13,8 @@ const PORT = process.env.PORT || 3000;
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, "uploads");
 const MANIFEST_PATH = path.join(UPLOAD_DIR, "manifest.json");
-const MAX_HISTORY_BATCHES = 50;
+const MAX_HISTORY_BATCHES = Number(process.env.MAX_HISTORY_BATCHES) || 50;
+const MAX_DISK_BYTES = Number(process.env.MAX_DISK_BYTES) || 800 * 1024 * 1024;
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -60,9 +61,31 @@ function persistBatches() {
   return manifestWriteChain;
 }
 
+function batchBytes(batch) {
+  return batch.files.reduce((sum, f) => sum + f.size, 0);
+}
+
+function deleteBatchFiles(batch) {
+  for (const f of batch.files) {
+    fs.promises.unlink(path.join(UPLOAD_DIR, f.storedName)).catch(() => {});
+  }
+}
+
+// Evicts oldest batches (deleting their stored files) once history exceeds
+// MAX_HISTORY_BATCHES or MAX_DISK_BYTES, so disk usage stays bounded.
+function pruneBatches() {
+  let total = batches.reduce((sum, b) => sum + batchBytes(b), 0);
+  while (batches.length > MAX_HISTORY_BATCHES || total > MAX_DISK_BYTES) {
+    const evicted = batches.pop();
+    if (!evicted) break;
+    total -= batchBytes(evicted);
+    deleteBatchFiles(evicted);
+  }
+}
+
 function addBatch(batch) {
   batches.unshift(batch);
-  batches = batches.slice(0, MAX_HISTORY_BATCHES);
+  pruneBatches();
   return persistBatches();
 }
 
@@ -304,6 +327,21 @@ app.post("/upload", (req, res) => {
 
 app.get("/files", (_req, res) => {
   res.json({ batches });
+});
+
+app.get("/files/:batchId/:storedName", (req, res) => {
+  const batch = batches.find((b) => b.id === req.params.batchId);
+  const file = batch && batch.files.find((f) => f.storedName === req.params.storedName);
+  if (!file) {
+    return res.status(404).json({ error: "File not found." });
+  }
+  const safeName = file.originalName.replace(/[\r\n"]/g, "");
+  res.setHeader("Content-Type", file.mimeType || "application/octet-stream");
+  res.setHeader(
+    "Content-Disposition",
+    `inline; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(file.originalName)}`
+  );
+  res.sendFile(path.join(UPLOAD_DIR, path.basename(file.storedName)));
 });
 
 if (require.main === module) {
