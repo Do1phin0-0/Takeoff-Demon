@@ -11,7 +11,7 @@ const Anthropic = require("@anthropic-ai/sdk");
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
-const UPLOAD_DIR = path.join(__dirname, "uploads");
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, "uploads");
 const MANIFEST_PATH = path.join(UPLOAD_DIR, "manifest.json");
 const MAX_HISTORY_BATCHES = 50;
 
@@ -306,6 +306,10 @@ app.get("/files", (_req, res) => {
   res.json({ batches });
 });
 
-app.listen(PORT, () => {
-  console.log(`Takeoff-Demon upload server listening on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Takeoff-Demon upload server listening on port ${PORT}`);
+  });
+}
+
+module.exports = app;
