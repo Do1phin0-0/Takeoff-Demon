@@ -9,7 +9,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
+    "dxf": "^5.3.1",
     "express": "^4.19.2",
-    "multer": "^2.0.0"
+    "express-basic-auth": "^1.2.1",
+    "multer": "^2.0.0",
+    "sharp": "^0.35.3"
   }
 }
