@@ -55,10 +55,27 @@
       let messages = [];
       let finished = false;
 
+      function escapeHtml(text) {
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+
+      // Assistant replies come back with light markdown (bold, italics) from the
+      // model; render just enough of it to not show literal asterisks in the chat.
+      function renderInlineMarkdown(text) {
+        let html = escapeHtml(text);
+        html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+        html = html.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, "<em>$1</em>");
+        return html;
+      }
+
       function addMessage(role, text) {
         const el = document.createElement("div");
         el.className = `msg ${role}`;
-        el.textContent = text;
+        if (role === "assistant") {
+          el.innerHTML = renderInlineMarkdown(text);
+        } else {
+          el.textContent = text;
+        }
         chat.appendChild(el);
       }
 
