@@ -16,3 +16,9 @@ server/.env
 # Build artifacts
 *.zip
 dist/
+
+# Node
+node_modules/
+uploads/
+*.log
+.env
