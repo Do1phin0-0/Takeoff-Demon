@@ -7,6 +7,7 @@ const basicAuth = require("express-basic-auth");
 const sharp = require("sharp");
 const { Helper: DxfHelper } = require("dxf");
 const Anthropic = require("@anthropic-ai/sdk");
+const { generateSubcontractDocx, FINALIZE_SUBCONTRACT_TOOL } = require("./lib/subcontract");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,8 +16,12 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, "uploads");
 const MANIFEST_PATH = path.join(UPLOAD_DIR, "manifest.json");
 const MAX_HISTORY_BATCHES = Number(process.env.MAX_HISTORY_BATCHES) || 50;
 const MAX_DISK_BYTES = Number(process.env.MAX_DISK_BYTES) || 800 * 1024 * 1024;
+const CONTRACTS_DIR = path.join(UPLOAD_DIR, "contracts");
+const CONTRACTS_MANIFEST_PATH = path.join(UPLOAD_DIR, "contracts.json");
+const MAX_CONTRACTS = Number(process.env.MAX_CONTRACTS) || 200;
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+fs.mkdirSync(CONTRACTS_DIR, { recursive: true });
 
 const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -39,6 +44,10 @@ const TAKEOFF_PROMPT = `You are a construction estimator's assistant reviewing a
 4. Assumptions and caveats — flag anything illegible, ambiguous, contradictory between sheets, or requiring field verification.
 
 Be direct and use bullet points. This is a rough read to help move a project forward, not a certified takeoff — make that limitation clear if quantities are uncertain.`;
+
+const SUBCONTRACT_AGENT_PROMPT =
+  fs.readFileSync(path.join(__dirname, "prompts", "subcontract-agent.md"), "utf8") +
+  "\n\n## Tool use\nOnce every required field above has been collected and confirmed with the user, call the finalize_subcontract tool with the structured data. Do not call it before then — ask clarifying questions and confirm each field first, per the workflow above.";
 
 // --- History (manifest) persistence ---
 
@@ -87,6 +96,36 @@ function addBatch(batch) {
   batches.unshift(batch);
   pruneBatches();
   return persistBatches();
+}
+
+// --- Contract history (separate manifest) persistence ---
+
+function loadContracts() {
+  try {
+    return JSON.parse(fs.readFileSync(CONTRACTS_MANIFEST_PATH, "utf8"));
+  } catch {
+    return [];
+  }
+}
+
+let contracts = loadContracts();
+let contractsWriteChain = Promise.resolve();
+
+function persistContracts() {
+  const snapshot = JSON.stringify(contracts, null, 2);
+  contractsWriteChain = contractsWriteChain
+    .then(() => fs.promises.writeFile(CONTRACTS_MANIFEST_PATH, snapshot))
+    .catch((err) => console.error("Failed to persist contracts manifest:", err.message));
+  return contractsWriteChain;
+}
+
+function addContract(contract) {
+  contracts.unshift(contract);
+  while (contracts.length > MAX_CONTRACTS) {
+    const evicted = contracts.pop();
+    fs.promises.unlink(path.join(CONTRACTS_DIR, evicted.storedName)).catch(() => {});
+  }
+  return persistContracts();
 }
 
 // --- File type handling ---
@@ -292,6 +331,7 @@ if (AUTH_USERNAME && AUTH_PASSWORD) {
 }
 
 app.use(express.static(path.join(__dirname, "public")));
+app.use(express.json({ limit: "1mb" }));
 
 app.post("/upload", (req, res) => {
   upload.array("files", 20)(req, res, async (err) => {
@@ -342,6 +382,85 @@ app.get("/files/:batchId/:storedName", (req, res) => {
     `inline; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(file.originalName)}`
   );
   res.sendFile(path.join(UPLOAD_DIR, path.basename(file.storedName)));
+});
+
+// --- Subcontract drafting ---
+
+app.post("/contracts/chat", async (req, res) => {
+  if (!anthropic) {
+    return res.status(503).json({ error: "Contract drafting requires ANTHROPIC_API_KEY." });
+  }
+  const incoming = Array.isArray(req.body.messages) ? req.body.messages : [];
+  if (incoming.length === 0) {
+    return res.status(400).json({ error: "messages must be a non-empty array." });
+  }
+  const messages = incoming.map((m) => ({
+    role: m.role === "assistant" ? "assistant" : "user",
+    content: [{ type: "text", text: String(m.text || "") }],
+  }));
+
+  try {
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 1536,
+      system: SUBCONTRACT_AGENT_PROMPT,
+      tools: [FINALIZE_SUBCONTRACT_TOOL],
+      messages,
+    });
+
+    const toolUse = response.content.find(
+      (b) => b.type === "tool_use" && b.name === "finalize_subcontract"
+    );
+
+    if (toolUse) {
+      const docxBuffer = await generateSubcontractDocx(toolUse.input);
+      const id = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+      const storedName = `${id}.docx`;
+      await fs.promises.writeFile(path.join(CONTRACTS_DIR, storedName), docxBuffer);
+      const contract = {
+        id,
+        createdAt: new Date().toISOString(),
+        storedName,
+        subcontractorName: toolUse.input.subcontractor?.companyName || "",
+        projectName: toolUse.input.project?.name || "",
+        subcontractTotal: toolUse.input.subcontractTotal || "",
+        fields: toolUse.input,
+      };
+      await addContract(contract);
+      return res.json({
+        done: true,
+        contractId: id,
+        downloadUrl: `/contracts/${id}/download`,
+        fields: toolUse.input,
+      });
+    }
+
+    const text = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("\n");
+    res.json({ done: false, reply: text });
+  } catch (err) {
+    res.status(502).json({ error: err.message || "AI request failed." });
+  }
+});
+
+app.get("/contracts", (_req, res) => {
+  res.json({ contracts });
+});
+
+app.get("/contracts/:id/download", (req, res) => {
+  const contract = contracts.find((c) => c.id === req.params.id);
+  if (!contract) {
+    return res.status(404).json({ error: "Contract not found." });
+  }
+  const filename = `${(contract.subcontractorName || "subcontract").replace(/[^a-zA-Z0-9_-]/g, "_")}.docx`;
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  );
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.sendFile(path.join(CONTRACTS_DIR, path.basename(contract.storedName)));
 });
 
 if (require.main === module) {
