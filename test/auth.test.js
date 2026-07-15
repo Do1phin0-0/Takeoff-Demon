@@ -1,13 +1,17 @@
 const { test, after } = require("node:test");
 const assert = require("node:assert/strict");
+const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
 const uploadDir = fs.mkdtempSync(path.join(os.tmpdir(), "takeoff-auth-test-"));
+// Generated at run time, not a literal, so this never looks like a checked-in credential.
+const testUsername = `test-${crypto.randomBytes(4).toString("hex")}`;
+const testPassword = crypto.randomBytes(16).toString("hex");
 process.env.UPLOAD_DIR = uploadDir;
-process.env.AUTH_USERNAME = "demo";
-process.env.AUTH_PASSWORD = "demopass";
+process.env.AUTH_USERNAME = testUsername;
+process.env.AUTH_PASSWORD = testPassword;
 delete process.env.ANTHROPIC_API_KEY;
 
 const request = require("supertest");
@@ -21,7 +25,7 @@ test("protected routes reject requests without credentials", async () => {
 });
 
 test("protected routes accept correct Basic Auth credentials", async () => {
-  const res = await request(app).get("/files").auth("demo", "demopass");
+  const res = await request(app).get("/files").auth(testUsername, testPassword);
   assert.equal(res.status, 200);
 });
 

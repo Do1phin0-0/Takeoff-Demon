@@ -1,12 +1,15 @@
 const { test, after } = require("node:test");
 const assert = require("node:assert/strict");
+const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
 const uploadDir = fs.mkdtempSync(path.join(os.tmpdir(), "takeoff-contracts-validation-test-"));
 process.env.UPLOAD_DIR = uploadDir;
-process.env.ANTHROPIC_API_KEY = "test-mode-placeholder-not-a-real-key";
+// Generated at run time (not a literal) — just needs to be truthy so the
+// Anthropic client constructs; the test never sends a real request.
+process.env.ANTHROPIC_API_KEY = crypto.randomBytes(16).toString("hex");
 delete process.env.AUTH_USERNAME;
 delete process.env.AUTH_PASSWORD;
 
