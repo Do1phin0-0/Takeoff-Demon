@@ -6,6 +6,7 @@ const multer = require("multer");
 const basicAuth = require("express-basic-auth");
 const sharp = require("sharp");
 const { Helper: DxfHelper } = require("dxf");
+const { PDFDocument } = require("pdf-lib");
 const Anthropic = require("@anthropic-ai/sdk");
 const { generateSubcontractDocx, FINALIZE_SUBCONTRACT_TOOL } = require("./lib/subcontract");
 
@@ -35,6 +36,7 @@ const ANALYZABLE_IMAGE_TYPES = new Set([
 ]);
 const MAX_ANALYSIS_BYTES = 30 * 1024 * 1024;
 const MAX_BATCH_ANALYSIS_BYTES = 20 * 1024 * 1024;
+const MAX_PDF_PAGES = 100; // Claude's document API limit.
 
 const TAKEOFF_PROMPT = `You are a construction estimator's assistant reviewing a batch of uploaded blueprint sheets and/or job-site photos, labeled by filename below. Produce one consolidated takeoff summary covering the whole batch, with these sections:
 
@@ -161,6 +163,13 @@ const ALLOWED_MIME_TYPES = new Set([
   "application/octet-stream",
 ]);
 
+// Anthropic SDK errors stringify their whole JSON body into err.message;
+// pull out just the human-readable part when the API provides one.
+function cleanApiErrorMessage(err, fallback) {
+  const nested = err?.error?.error?.message;
+  return typeof nested === "string" ? nested : err.message || fallback;
+}
+
 // Builds a Claude content block for a file, or returns a skip reason.
 async function prepareFile(file) {
   if (file.size > MAX_ANALYSIS_BYTES) {
@@ -184,13 +193,28 @@ async function prepareFile(file) {
   }
 
   if (ext === ".pdf") {
+    const buffer = fs.readFileSync(file.path);
+    try {
+      const pdf = await PDFDocument.load(buffer, { ignoreEncryption: true });
+      if (pdf.isEncrypted) {
+        return { skip: "This PDF is password-protected — remove the password and re-upload for analysis." };
+      }
+      const pageCount = pdf.getPageCount();
+      if (pageCount > MAX_PDF_PAGES) {
+        return {
+          skip: `This PDF has ${pageCount} pages, over Claude's ${MAX_PDF_PAGES}-page limit — split it or export the relevant sheets separately.`,
+        };
+      }
+    } catch (err) {
+      return { skip: `Could not read this PDF (${err.message}) — it may be corrupted.` };
+    }
     return {
       block: {
         type: "document",
         source: {
           type: "base64",
           media_type: "application/pdf",
-          data: fs.readFileSync(file.path).toString("base64"),
+          data: buffer.toString("base64"),
         },
       },
     };
@@ -282,7 +306,7 @@ async function analyzeBatch(files) {
       .join("\n");
     return { status: "ok", text, skippedFiles };
   } catch (err) {
-    return { status: "error", reason: err.message || "AI analysis failed.", skippedFiles };
+    return { status: "error", reason: cleanApiErrorMessage(err, "AI analysis failed."), skippedFiles };
   }
 }
 
@@ -446,7 +470,7 @@ app.post("/contracts/chat", async (req, res) => {
       .join("\n");
     res.json({ done: false, reply: text });
   } catch (err) {
-    res.status(502).json({ error: err.message || "AI request failed." });
+    res.status(502).json({ error: cleanApiErrorMessage(err, "AI request failed.") });
   }
 });
 

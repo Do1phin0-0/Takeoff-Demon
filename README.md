@@ -14,7 +14,7 @@ npm run dev
 Then open http://localhost:3000 and upload one or more files. All files in a single upload are analyzed together as one batch (e.g. multiple sheets of the same plan set), producing one consolidated takeoff summary rather than a separate summary per file.
 
 Format support for AI analysis:
-- **PDF, PNG, JPG, WebP** — read directly by Claude.
+- **PDF, PNG, JPG, WebP** — read directly by Claude. PDFs over 100 pages (Claude's document limit), password-protected, or corrupted PDFs are skipped with a clear reason instead of being sent and failing.
 - **DXF** — rendered to an image first, then read by Claude.
 - **DWG, TIFF** — stored for manual review only; not yet analyzed (DWG is a binary CAD format without a straightforward open-source renderer, and TIFF isn't a format Claude's vision API accepts).
 

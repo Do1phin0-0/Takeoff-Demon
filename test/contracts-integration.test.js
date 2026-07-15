@@ -143,3 +143,21 @@ test("API error from Claude surfaces as a 502, not a crash", async () => {
   assert.equal(res.status, 502);
   assert.match(res.body.error, /simulated upstream failure/);
 });
+
+test("a structured Anthropic API error surfaces its human-readable message, not the raw JSON body", async () => {
+  // Mirrors the real shape Anthropic's SDK throws (see APIError in the SDK source):
+  // a top-level error with a nested .error.message, which err.message would
+  // otherwise stringify wholesale (e.g. `400 {"type":"error","error":{...}}`).
+  messagesProto.create = async () => {
+    const err = new Error('400 {"type":"error","error":{"type":"invalid_request_error","message":"Could not process PDF"}}');
+    err.error = { type: "error", error: { type: "invalid_request_error", message: "Could not process PDF" } };
+    throw err;
+  };
+
+  const res = await request(app)
+    .post("/contracts/chat")
+    .send({ messages: [{ role: "user", text: "hello" }] });
+
+  assert.equal(res.status, 502);
+  assert.equal(res.body.error, "Could not process PDF");
+});
