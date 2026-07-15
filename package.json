@@ -1,0 +1,14 @@
+{
+  "name": "takeoff-demon",
+  "version": "0.1.0",
+  "description": "Construction blueprint reading and project estimation assistant.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^2.0.0"
+  }
+}
