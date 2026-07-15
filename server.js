@@ -333,6 +333,11 @@ if (AUTH_USERNAME && AUTH_PASSWORD) {
 app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json({ limit: "1mb" }));
 
+// Short alias for the subcontract-drafting page.
+app.get("/contract", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "contracts.html"));
+});
+
 app.post("/upload", (req, res) => {
   upload.array("files", 20)(req, res, async (err) => {
     if (err instanceof multer.MulterError) {
