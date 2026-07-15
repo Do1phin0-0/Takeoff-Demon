@@ -6,7 +6,7 @@ const path = require("path");
 
 const uploadDir = fs.mkdtempSync(path.join(os.tmpdir(), "takeoff-contracts-validation-test-"));
 process.env.UPLOAD_DIR = uploadDir;
-process.env.ANTHROPIC_API_KEY = "sk-ant-test-dummy-key-not-real";
+process.env.ANTHROPIC_API_KEY = "test-mode-placeholder-not-a-real-key";
 delete process.env.AUTH_USERNAME;
 delete process.env.AUTH_PASSWORD;
 
