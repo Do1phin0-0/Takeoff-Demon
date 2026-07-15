@@ -5,9 +5,9 @@ This agent is a construction-focused assistant designed to simplify blueprint re
 
 ```
 npm install
-export ANTHROPIC_API_KEY=sk-ant-...   # optional; omit to run upload-only, no AI analysis
-export AUTH_USERNAME=someone           # optional; omit to run without auth (dev only)
-export AUTH_PASSWORD=somepassword      # required together with AUTH_USERNAME
+export ANTHROPIC_API_KEY=<your-anthropic-api-key>   # optional; omit to run upload-only, no AI analysis
+export AUTH_USERNAME=<pick-a-username>       # optional; omit to run without auth (dev only)
+export AUTH_PASSWORD=<pick-a-password>       # required together with AUTH_USERNAME
 npm run dev
 ```
 
