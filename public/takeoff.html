@@ -34,6 +34,15 @@
     <h1>Takeoff</h1>
     <p class="hint" id="fileLabel">Loading file…</p>
 
+    <div class="controls" id="pageControls" style="display:none">
+      <button class="secondary" id="prevPage">◀ Prev</button>
+      <span id="pageLabel"></span>
+      <input type="number" id="pageInput" min="1" style="width:5rem" />
+      <button class="secondary" id="goPage">Go to page</button>
+      <button class="secondary" id="nextPage">Next ▶</button>
+      <span class="hint" style="margin:0">Changing pages resets calibration — scale is per sheet.</span>
+    </div>
+
     <div class="steps">
       <span class="step" id="step1">1. Calibrate scale</span>
       <span class="step" id="step2">2. Trace boundary</span>
@@ -85,6 +94,9 @@
       let calibration = null; // {pixelDistance, realDistance, unit}
       let tracePoints = [];
       let closedPolygon = null;
+      let pdfDoc = null;
+      let currentPage = Math.max(1, parseInt(params.get("page"), 10) || 1);
+      let totalPages = 1;
 
       function setResult(text, cls) {
         resultEl.textContent = text;
@@ -113,13 +125,11 @@
         if (ext === "pdf") {
           try {
             pdfjsLib.GlobalWorkerOptions.workerSrc = "/vendor/pdfjs/pdf.worker.min.js";
-            const doc = await pdfjsLib.getDocument(url).promise;
-            const page = await doc.getPage(1);
-            const viewport = page.getViewport({ scale: 1.5 });
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            await page.render({ canvasContext: ctx, viewport }).promise;
-            sourceImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            pdfDoc = await pdfjsLib.getDocument(url).promise;
+            totalPages = pdfDoc.numPages;
+            if (currentPage > totalPages) currentPage = 1;
+            await renderPdfPage(currentPage);
+            setupPageControls();
             afterSourceLoaded();
           } catch (e) {
             fail(`Could not render PDF: ${e.message}`);
@@ -136,6 +146,61 @@
           img.onerror = () => fail("Could not load image.");
           img.src = url;
         }
+      }
+
+      async function renderPdfPage(pageNum) {
+        const page = await pdfDoc.getPage(pageNum);
+        const baseViewport = page.getViewport({ scale: 1 });
+        // Target ~3600px wide so dimension text on Arch D/E sheets stays legible for clicking.
+        const scale = Math.min(2.5, Math.max(1, 3600 / baseViewport.width));
+        const viewport = page.getViewport({ scale });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        sourceImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        fileLabel.textContent = `File: ${fileName} — page ${pageNum} of ${totalPages}`;
+      }
+
+      function setupPageControls() {
+        if (totalPages <= 1) return;
+        const controls = document.getElementById("pageControls");
+        controls.style.display = "flex";
+        const label = document.getElementById("pageLabel");
+        const input = document.getElementById("pageInput");
+        const update = () => {
+          label.textContent = `Page ${currentPage} / ${totalPages}`;
+          input.value = currentPage;
+        };
+        update();
+        const changePage = async (target) => {
+          const p = Math.min(totalPages, Math.max(1, target));
+          if (p === currentPage) return;
+          currentPage = p;
+          calibrationPoints = [];
+          calibration = null;
+          tracePoints = [];
+          closedPolygon = null;
+          mode = "calibrating";
+          document.getElementById("confirmCalibration").disabled = true;
+          document.getElementById("calibrateControls").style.display = "flex";
+          document.getElementById("startTraceControls").style.display = "none";
+          document.getElementById("traceControls").style.display = "none";
+          document.getElementById("saveControls").style.display = "none";
+          ["step1", "step2", "step3"].forEach((id) => {
+            document.getElementById(id).classList.remove("active", "done");
+          });
+          document.getElementById("step1").classList.add("active");
+          setResult(`Rendering page ${p}…`);
+          await renderPdfPage(p);
+          setResult("");
+          update();
+          const url = new URL(location.href);
+          url.searchParams.set("page", String(p));
+          history.replaceState(null, "", url);
+        };
+        document.getElementById("prevPage").addEventListener("click", () => changePage(currentPage - 1));
+        document.getElementById("nextPage").addEventListener("click", () => changePage(currentPage + 1));
+        document.getElementById("goPage").addEventListener("click", () => changePage(parseInt(input.value, 10) || currentPage));
       }
 
       function afterSourceLoaded() {
@@ -300,6 +365,7 @@
         const markupImage = canvas.toDataURL("image/png");
         const payload = {
           fileName,
+          pageNumber: currentPage,
           quantityType: "square_footage",
           scale: calibration,
           polygon: closedPolygon,

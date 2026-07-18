@@ -152,13 +152,17 @@ function scoreConfidence({ scale, polygon, areaPixels, canvasWidth, canvasHeight
 }
 
 app.post("/api/takeoffs", (req, res) => {
-  const { fileName, quantityType, scale, polygon, markupImage, canvasWidth, canvasHeight, note } = req.body || {};
+  const { fileName, pageNumber, quantityType, scale, polygon, markupImage, canvasWidth, canvasHeight, note } = req.body || {};
 
   if (!fileName || !safeStoredFilePath(UPLOAD_DIR, fileName) || !fs.existsSync(safeStoredFilePath(UPLOAD_DIR, fileName))) {
     return res.status(400).json({ error: "fileName must reference an uploaded file." });
   }
   if (quantityType !== "square_footage") {
     return res.status(400).json({ error: "Only quantityType 'square_footage' is supported in V1." });
+  }
+  const page = pageNumber === undefined ? 1 : Number(pageNumber);
+  if (!Number.isInteger(page) || page < 1) {
+    return res.status(400).json({ error: "pageNumber must be a positive integer." });
   }
   if (!scale || typeof scale.pixelDistance !== "number" || scale.pixelDistance <= 0 || typeof scale.realDistance !== "number" || scale.realDistance <= 0) {
     return res.status(400).json({ error: "scale.pixelDistance and scale.realDistance must be positive numbers." });
@@ -185,6 +189,7 @@ app.post("/api/takeoffs", (req, res) => {
 
   const record = takeoffsStore.append({
     fileName,
+    pageNumber: page,
     quantityType,
     value: Math.round(areaSqFt * 100) / 100,
     unit: "sq ft",
