@@ -60,14 +60,20 @@
             result.textContent = `Error: ${body.error || res.statusText}`;
           } else {
             result.className = "ok";
-            result.textContent =
-              `Uploaded ${body.uploaded.length} file(s):\n` +
+            result.textContent = "";
+            result.innerHTML =
+              `Uploaded ${body.uploaded.length} file(s):<br>` +
               body.uploaded
-                .map(
-                  (f) =>
-                    `  ${f.originalName}  (${(f.size / 1024 / 1024).toFixed(2)} MB)`
-                )
-                .join("\n");
+                .map((f) => {
+                  const label = `${f.originalName} (${(f.size / 1024 / 1024).toFixed(2)} MB)`;
+                  const ext = f.storedName.split(".").pop().toLowerCase();
+                  const canTakeoff = ["pdf", "png", "jpg", "jpeg", "webp", "tif", "tiff"].includes(ext);
+                  const link = canTakeoff
+                    ? ` — <a href="/takeoff.html?file=${encodeURIComponent(f.storedName)}">Start takeoff →</a>`
+                    : " — takeoff not supported for this file type yet";
+                  return `  ${label}${link}`;
+                })
+                .join("<br>");
           }
         } catch (err) {
           result.className = "err";
