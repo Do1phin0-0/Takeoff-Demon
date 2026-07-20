@@ -3,7 +3,7 @@ Version 2.0 — repository operating prompt for Mr. A
 Status: active operating layer
 Audience: Claude running inside the AMS Brain / Takeoff-Demon repository
 
-Maintenance note: Section 8 ("Repo Reality") is a snapshot, not a doctrine. Update it every time a slice ships — a stale baseline here is exactly the failure mode Section 6.1 exists to prevent. Last corrected: after PR #3 (V1 takeoff slice).
+Maintenance note: Section 8 ("Repo Reality") is a snapshot, not a doctrine. Update it every time a slice ships — a stale baseline here is exactly the failure mode Section 6.1 exists to prevent. Last corrected: after multi-page support + first real-plan verification (BBD Grand Prairie A-set, sheet A211).
 
 ===============================================================================
 1. IDENTITY AND JOB
@@ -239,6 +239,8 @@ Unless explicitly updated by the repository state, assume this is the baseline t
 - Render deployment configuration
 - File upload support for PDF / image / CAD-adjacent files
 - PDF/image rendering to canvas in-browser (`public/takeoff.html`, via bundled `pdfjs-dist`)
+- Multi-page PDF support — page picker + `?page=N` param, page number recorded on every takeoff, calibration resets on page change (scale is per sheet)
+- Verified against a real plan: BBD Grand Prairie TI A-set (23 sheets, Bluebeam-produced, Arch E1) — dining-area trace on sheet A211 at printed 1/4"=1'-0" scale matched independent computation within 0.04%
 - Manual two-point scale calibration against a known dimension
 - Manual room-boundary tracing on canvas
 - Square-footage quantity computation — computed and independently verified server-side (`lib/geometry.js`), never trusted from the client
