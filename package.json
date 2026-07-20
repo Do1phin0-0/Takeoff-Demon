@@ -5,11 +5,21 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node --test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
+    "dxf": "^5.3.1",
     "express": "^4.19.2",
+    "express-basic-auth": "^1.2.1",
+    "jszip": "^3.10.1",
     "multer": "^2.0.0",
-    "pdfjs-dist": "^3.11.174"
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^3.11.174",
+    "sharp": "^0.35.3"
+  },
+  "devDependencies": {
+    "supertest": "^7.2.2"
   }
 }

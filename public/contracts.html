@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Takeoff-Demon — Subcontracts</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+      h1 { margin-bottom: 0.25rem; }
+      h2 { font-size: 1.1rem; margin: 2rem 0 0.75rem; }
+      .nav { margin: 0 0 1rem; font-size: 0.9rem; }
+      .hint { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
+      #chat { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem; }
+      .msg { padding: 0.6rem 0.85rem; border-radius: 8px; font-size: 0.92rem; white-space: pre-wrap; max-width: 90%; }
+      .msg.user { align-self: flex-end; background: #2563eb; color: #fff; }
+      .msg.assistant { align-self: flex-start; border: 1px solid #444; }
+      .msg.err { align-self: flex-start; border: 1px solid #b91c1c; color: #b91c1c; }
+      form { display: flex; gap: 0.5rem; }
+      textarea { flex: 1; padding: 0.6rem; font: inherit; border-radius: 6px; border: 1px solid #888; resize: vertical; min-height: 2.5rem; }
+      button { padding: 0.6rem 1rem; font-size: 1rem; cursor: pointer; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff; }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      .done-card { border: 1px solid #1a7f37; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+      .done-card a { font-weight: 600; }
+      .contract-card { border: 1px solid #444; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+      .contract-card h3 { margin: 0 0 0.35rem; font-size: 1rem; }
+      .contract-meta { color: #666; font-size: 0.8rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Draft a Subcontract</h1>
+    <p class="nav"><a href="/index.html">← Back to takeoffs</a></p>
+    <p class="hint">
+      Walks you field-by-field through an AMS subcontract, then generates the filled Word document.
+    </p>
+
+    <div id="chat"></div>
+    <div id="doneArea"></div>
+    <form id="form">
+      <textarea id="input" placeholder="Describe the subcontract you need..." required></textarea>
+      <button type="submit" id="submit">Send</button>
+    </form>
+
+    <h2>Past contracts</h2>
+    <div id="history"></div>
+
+    <script>
+      const chat = document.getElementById("chat");
+      const doneArea = document.getElementById("doneArea");
+      const form = document.getElementById("form");
+      const input = document.getElementById("input");
+      const submit = document.getElementById("submit");
+      const history = document.getElementById("history");
+
+      let messages = [];
+      let finished = false;
+
+      function escapeHtml(text) {
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+
+      // Assistant replies come back with light markdown (bold, italics) from the
+      // model; render just enough of it to not show literal asterisks in the chat.
+      function renderInlineMarkdown(text) {
+        let html = escapeHtml(text);
+        html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+        html = html.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, "<em>$1</em>");
+        return html;
+      }
+
+      function addMessage(role, text) {
+        const el = document.createElement("div");
+        el.className = `msg ${role}`;
+        if (role === "assistant") {
+          el.innerHTML = renderInlineMarkdown(text);
+        } else {
+          el.textContent = text;
+        }
+        chat.appendChild(el);
+      }
+
+      function renderContract(c) {
+        const card = document.createElement("div");
+        card.className = "contract-card";
+        const title = document.createElement("h3");
+        title.textContent = `${c.subcontractorName || "Untitled"} — ${c.projectName || ""}`;
+        card.appendChild(title);
+        const meta = document.createElement("div");
+        meta.className = "contract-meta";
+        meta.textContent = `${new Date(c.createdAt).toLocaleString()} · ${c.subcontractTotal || ""}`;
+        card.appendChild(meta);
+        const link = document.createElement("a");
+        link.href = `/contracts/${c.id}/download`;
+        link.textContent = "Download .docx";
+        card.appendChild(document.createElement("br"));
+        card.appendChild(link);
+        return card;
+      }
+
+      async function loadHistory() {
+        try {
+          const res = await fetch("/contracts");
+          if (!res.ok) return;
+          const body = await res.json();
+          history.innerHTML = "";
+          if (body.contracts.length === 0) {
+            history.textContent = "No contracts drafted yet.";
+            return;
+          }
+          for (const c of body.contracts) history.appendChild(renderContract(c));
+        } catch {
+          // History is best-effort; ignore failures here.
+        }
+      }
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (finished || !input.value.trim()) return;
+
+        const text = input.value.trim();
+        addMessage("user", text);
+        messages.push({ role: "user", text });
+        input.value = "";
+        submit.disabled = true;
+
+        try {
+          const res = await fetch("/contracts/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messages }),
+          });
+          const body = await res.json();
+          if (!res.ok) {
+            addMessage("err", body.error || res.statusText);
+            return;
+          }
+          if (body.done) {
+            finished = true;
+            input.disabled = true;
+            submit.disabled = true;
+            const card = document.createElement("div");
+            card.className = "done-card";
+            card.innerHTML = `Subcontract generated. <a href="${body.downloadUrl}">Download the .docx</a>`;
+            doneArea.appendChild(card);
+            loadHistory();
+          } else {
+            addMessage("assistant", body.reply);
+            messages.push({ role: "assistant", text: body.reply });
+          }
+        } catch (err) {
+          addMessage("err", `Network error: ${err.message}`);
+        } finally {
+          submit.disabled = finished;
+        }
+      });
+
+      addMessage(
+        "assistant",
+        "Tell me about the subcontract you need — trade, project, and subcontractor — and I'll walk you through the rest."
+      );
+      loadHistory();
+    </script>
+  </body>
+</html>
