@@ -32,6 +32,7 @@
   </head>
   <body>
     <h1>Takeoff</h1>
+    <p class="hint" style="margin-bottom:0.5rem"><a href="/index.html">← Upload</a> · <a href="/takeoffs.html">Review takeoffs →</a></p>
     <p class="hint" id="fileLabel">Loading file…</p>
 
     <div class="controls" id="pageControls" style="display:none">
@@ -64,6 +65,7 @@
     <div class="controls" id="traceControls" style="display:none">
       <span id="traceHint">Click points around the room boundary, then close the shape.</span>
       <button id="closeShape" disabled>Close shape</button>
+      <button class="secondary" id="undoPoint" disabled>Undo point</button>
       <button class="secondary" id="resetTrace">Reset</button>
     </div>
 
@@ -280,6 +282,7 @@
           tracePoints.push(p);
           redraw();
           document.getElementById("closeShape").disabled = tracePoints.length < 3;
+          document.getElementById("undoPoint").disabled = tracePoints.length === 0;
         }
       }
 
@@ -315,6 +318,8 @@
         mode = "tracing";
         tracePoints = [];
         closedPolygon = null;
+        document.getElementById("closeShape").disabled = true;
+        document.getElementById("undoPoint").disabled = true;
         document.getElementById("step2").classList.add("active");
         document.getElementById("startTraceControls").style.display = "none";
         document.getElementById("traceControls").style.display = "flex";
@@ -322,10 +327,19 @@
         redraw();
       });
 
+      document.getElementById("undoPoint").addEventListener("click", () => {
+        if (closedPolygon || tracePoints.length === 0) return;
+        tracePoints.pop();
+        document.getElementById("closeShape").disabled = tracePoints.length < 3;
+        document.getElementById("undoPoint").disabled = tracePoints.length === 0;
+        redraw();
+      });
+
       document.getElementById("resetTrace").addEventListener("click", () => {
         tracePoints = [];
         closedPolygon = null;
         document.getElementById("closeShape").disabled = true;
+        document.getElementById("undoPoint").disabled = true;
         document.getElementById("saveControls").style.display = "none";
         redraw();
       });
