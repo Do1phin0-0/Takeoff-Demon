@@ -137,7 +137,9 @@ function addContract(contract) {
 // --- Takeoff (measured quantities) storage ---
 
 const MARKUP_DIR = path.join(UPLOAD_DIR, "markups");
-const PDFJS_DIR = path.join(__dirname, "node_modules", "pdfjs-dist", "build");
+// legacy build: supports a wider browser range than the default build,
+// which relies on very new JS builtins (e.g. Map.getOrInsertComputed).
+const PDFJS_DIR = path.join(__dirname, "node_modules", "pdfjs-dist", "legacy", "build");
 fs.mkdirSync(MARKUP_DIR, { recursive: true });
 
 const takeoffsStore = makeJsonFileStore(path.join(UPLOAD_DIR, "data", "takeoffs.json"));

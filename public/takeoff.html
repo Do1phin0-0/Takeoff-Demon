@@ -79,8 +79,9 @@
 
     <div id="result"></div>
 
-    <script src="/vendor/pdfjs/pdf.min.js"></script>
-    <script>
+    <script type="module">
+      import * as pdfjsLib from "/vendor/pdfjs/pdf.min.mjs";
+
       const params = new URLSearchParams(location.search);
       const fileName = params.get("file");
       const fileLabel = document.getElementById("fileLabel");
@@ -124,8 +125,8 @@
         }
         if (ext === "pdf") {
           try {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = "/vendor/pdfjs/pdf.worker.min.js";
-            pdfDoc = await pdfjsLib.getDocument(url).promise;
+            pdfjsLib.GlobalWorkerOptions.workerSrc = "/vendor/pdfjs/pdf.worker.min.mjs";
+            pdfDoc = await pdfjsLib.getDocument({ url }).promise;
             totalPages = pdfDoc.numPages;
             if (currentPage > totalPages) currentPage = 1;
             await renderPdfPage(currentPage);
