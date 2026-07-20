@@ -8,21 +8,31 @@
       :root { color-scheme: light dark; }
       body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
       h1 { margin-bottom: 0.25rem; }
+      h2 { font-size: 1.1rem; margin: 2rem 0 0.75rem; }
+      .nav { margin: 0 0 1rem; font-size: 0.9rem; }
       .hint { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
       form { display: flex; flex-direction: column; gap: 1rem; }
       input[type="file"] { padding: 0.5rem; border: 1px dashed #888; border-radius: 6px; }
       button { padding: 0.6rem 1rem; font-size: 1rem; cursor: pointer; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff; }
       button:disabled { opacity: 0.6; cursor: not-allowed; }
-      #result { margin-top: 1.5rem; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 0.85rem; }
-      .ok { color: #1a7f37; }
-      .err { color: #b91c1c; }
+      #result { margin-top: 1.5rem; }
+      .err { color: #b91c1c; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+      .batch-card { border: 1px solid #444; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+      .batch-card h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+      .batch-meta { color: #666; font-size: 0.8rem; margin-bottom: 0.75rem; }
+      .file-list { color: #666; font-size: 0.8rem; margin-bottom: 0.75rem; }
+      .analysis { white-space: pre-wrap; font-size: 0.9rem; }
+      .analysis.skipped, .analysis.error { color: #b45309; font-style: italic; }
+      .skipped-note { color: #b45309; font-size: 0.8rem; margin-top: 0.5rem; font-style: italic; }
     </style>
   </head>
   <body>
     <h1>Takeoff-Demon</h1>
+    <p class="nav"><a href="/contract">Draft a subcontract →</a></p>
     <p class="hint">
       Upload blueprints or photos. Accepts PDF, PNG, JPG, WebP, TIFF, DWG, DXF.
       Max 100 MB per file, up to 20 files at once.
+      PDF, PNG, JPG, WebP, and DXF files get one combined AI takeoff summary across the whole batch.
     </p>
     <form id="form">
       <input
@@ -36,10 +46,86 @@
       <button type="submit" id="submit">Upload</button>
     </form>
     <div id="result"></div>
+
+    <h2>Past uploads</h2>
+    <div id="history"></div>
+
     <script>
       const form = document.getElementById("form");
       const submit = document.getElementById("submit");
       const result = document.getElementById("result");
+      const history = document.getElementById("history");
+
+      function renderBatch(batch) {
+        const card = document.createElement("div");
+        card.className = "batch-card";
+
+        const title = document.createElement("h3");
+        title.textContent = new Date(batch.createdAt).toLocaleString();
+        card.appendChild(title);
+
+        const fileList = document.createElement("div");
+        fileList.className = "file-list";
+        const TAKEOFF_EXTS = ["pdf", "png", "jpg", "jpeg", "webp", "tif", "tiff"];
+        batch.files.forEach((f, i) => {
+          if (i > 0) fileList.appendChild(document.createTextNode(" · "));
+          const link = document.createElement("a");
+          link.href = `/files/${encodeURIComponent(batch.id)}/${encodeURIComponent(f.storedName)}`;
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.textContent = `${f.originalName} (${(f.size / 1024 / 1024).toFixed(2)} MB)`;
+          fileList.appendChild(link);
+          const ext = f.storedName.split(".").pop().toLowerCase();
+          if (TAKEOFF_EXTS.includes(ext)) {
+            fileList.appendChild(document.createTextNode(" ["));
+            const takeoffLink = document.createElement("a");
+            takeoffLink.href = `/takeoff.html?file=${encodeURIComponent(f.storedName)}`;
+            takeoffLink.textContent = "Start takeoff →";
+            fileList.appendChild(takeoffLink);
+            fileList.appendChild(document.createTextNode("]"));
+          }
+        });
+        card.appendChild(fileList);
+
+        const analysis = document.createElement("div");
+        if (batch.analysis.status === "ok") {
+          analysis.className = "analysis";
+          analysis.textContent = batch.analysis.text;
+        } else {
+          analysis.className = `analysis ${batch.analysis.status}`;
+          analysis.textContent = batch.analysis.reason;
+        }
+        card.appendChild(analysis);
+
+        if (batch.analysis.skippedFiles && batch.analysis.skippedFiles.length > 0) {
+          const note = document.createElement("div");
+          note.className = "skipped-note";
+          note.textContent = batch.analysis.skippedFiles
+            .map((s) => `${s.originalName}: ${s.reason}`)
+            .join(" · ");
+          card.appendChild(note);
+        }
+
+        return card;
+      }
+
+      async function loadHistory() {
+        try {
+          const res = await fetch("/files");
+          if (!res.ok) return;
+          const body = await res.json();
+          history.innerHTML = "";
+          if (body.batches.length === 0) {
+            history.textContent = "No uploads yet.";
+            return;
+          }
+          for (const batch of body.batches) {
+            history.appendChild(renderBatch(batch));
+          }
+        } catch {
+          // History is best-effort; ignore failures here.
+        }
+      }
 
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -50,8 +136,8 @@
         for (const f of input.files) data.append("files", f);
 
         submit.disabled = true;
-        result.textContent = "Uploading...";
         result.className = "";
+        result.textContent = "Uploading and analyzing...";
         try {
           const res = await fetch("/upload", { method: "POST", body: data });
           const body = await res.json();
@@ -59,21 +145,10 @@
             result.className = "err";
             result.textContent = `Error: ${body.error || res.statusText}`;
           } else {
-            result.className = "ok";
-            result.textContent = "";
-            result.innerHTML =
-              `Uploaded ${body.uploaded.length} file(s):<br>` +
-              body.uploaded
-                .map((f) => {
-                  const label = `${f.originalName} (${(f.size / 1024 / 1024).toFixed(2)} MB)`;
-                  const ext = f.storedName.split(".").pop().toLowerCase();
-                  const canTakeoff = ["pdf", "png", "jpg", "jpeg", "webp", "tif", "tiff"].includes(ext);
-                  const link = canTakeoff
-                    ? ` — <a href="/takeoff.html?file=${encodeURIComponent(f.storedName)}">Start takeoff →</a>`
-                    : " — takeoff not supported for this file type yet";
-                  return `  ${label}${link}`;
-                })
-                .join("<br>");
+            result.innerHTML = "";
+            result.appendChild(renderBatch(body));
+            input.value = "";
+            loadHistory();
           }
         } catch (err) {
           result.className = "err";
@@ -82,6 +157,8 @@
           submit.disabled = false;
         }
       });
+
+      loadHistory();
     </script>
   </body>
 </html>

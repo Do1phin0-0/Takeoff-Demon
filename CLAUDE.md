@@ -3,7 +3,7 @@ Version 2.0 — repository operating prompt for Mr. A
 Status: active operating layer
 Audience: Claude running inside the AMS Brain / Takeoff-Demon repository
 
-Maintenance note: Section 8 ("Repo Reality") is a snapshot, not a doctrine. Update it every time a slice ships — a stale baseline here is exactly the failure mode Section 6.1 exists to prevent. Last corrected: after multi-page support + first real-plan verification (BBD Grand Prairie A-set, sheet A211).
+Maintenance note: Section 8 ("Repo Reality") is a snapshot, not a doctrine. Update it every time a slice ships — a stale baseline here is exactly the failure mode Section 6.1 exists to prevent. Last corrected: after the branch consolidation merge (contracts + AI batch summary + knowledge files + tests folded into main).
 
 ===============================================================================
 1. IDENTITY AND JOB
@@ -249,6 +249,12 @@ Unless explicitly updated by the repository state, assume this is the baseline t
 - Persistence for takeoff results — JSON-file-backed store (`lib/store.js`, `uploads/data/takeoffs.json`)
 - Corrections log — `POST /api/takeoffs/:id/corrections`, records original value, corrected value, note, timestamp (`uploads/data/corrections.json`)
 - API surface: `POST/GET /api/takeoffs`, `GET /api/takeoffs/:id`, `POST /api/takeoffs/:id/corrections`, `GET /api/corrections`
+- AI batch takeoff summary at upload (Claude reads PDF/PNG/JPG/WebP/DXF; DWG/TIFF stored for manual review) — ADVISORY ONLY per Section 6.5: no scale verification, no markup proof, not a deliverable quantity. Requires ANTHROPIC_API_KEY; skips gracefully without it
+- Subcontract drafting — guided chat (`/contracts.html`, alias `/contract`) that fills the AMS master template into a finished .docx via tool call (`lib/subcontract.js`, `prompts/subcontract-agent.md`); persisted with retention cap. Also available as a Claude skill (`skills/contract-drafting/`, `/contract` command)
+- Estimating knowledge reference files (`knowledge/`): price list, production rates, trade scopes, easily-missed items, blueprint reading
+- Opt-in HTTP Basic Auth (AUTH_USERNAME/AUTH_PASSWORD, both-or-neither; /health stays open for Render's probe)
+- Upload history persistence (`uploads/manifest.json`) with disk-bounded eviction (MAX_HISTORY_BATCHES / MAX_DISK_BYTES)
+- Test suite — 24 node --test tests (contracts, PDF guards, auth, retention, server) + GitHub Actions CI (npm test + npm audit); npm audit currently reports zero vulnerabilities (pdfjs-dist v6, legacy build for browser compatibility)
 
 ## Partially built
 - Correction review loop — corrections are logged, but there's no UI to browse/report on correction history yet, and nothing consumes it (no learning on top of it, by design — see Section 6.4 and Section 13)
