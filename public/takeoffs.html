@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Takeoff-Demon — Review Takeoffs</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+      h1 { margin-bottom: 0.25rem; }
+      .nav { margin: 0 0 1rem; font-size: 0.9rem; }
+      .hint { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
+      .card { border: 1px solid #444; border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem; }
+      .card h3 { margin: 0 0 0.25rem; font-size: 1.05rem; }
+      .meta { color: #666; font-size: 0.8rem; margin-bottom: 0.6rem; }
+      .value { font-size: 1.3rem; font-weight: 700; }
+      .value .unit { font-size: 0.9rem; font-weight: 400; color: #666; }
+      .confidence-medium { color: #a86a00; font-weight: 600; }
+      .confidence-low, .confidence-invalid { color: #b91c1c; font-weight: 600; }
+      .reasons { color: #666; font-size: 0.85rem; margin: 0.3rem 0 0.6rem; }
+      .markup img { max-width: 100%; border: 1px solid #888; border-radius: 4px; margin: 0.5rem 0; }
+      .status { font-size: 0.85rem; margin: 0.4rem 0; }
+      .status.approved { color: #1a7f37; font-weight: 600; }
+      .status.corrected { color: #a86a00; font-weight: 600; }
+      .status.unreviewed { color: #666; }
+      .corrections { font-size: 0.85rem; margin: 0.4rem 0; }
+      .corrections li { margin-bottom: 0.2rem; }
+      .actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.6rem; }
+      button { padding: 0.45rem 0.8rem; font-size: 0.9rem; cursor: pointer; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff; }
+      button.secondary { background: transparent; color: inherit; }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      input { padding: 0.4rem; border-radius: 4px; border: 1px solid #888; }
+      .note { font-style: italic; color: #666; font-size: 0.85rem; }
+      .err { color: #b91c1c; }
+    </style>
+  </head>
+  <body>
+    <h1>Review Takeoffs</h1>
+    <p class="nav"><a href="/index.html">← Upload</a></p>
+    <p class="hint">
+      Every saved takeoff, newest first, with its markup proof and confidence reasoning.
+      Approve what's right; correct what's wrong — both get logged.
+    </p>
+    <div id="list">Loading…</div>
+
+    <script>
+      const list = document.getElementById("list");
+
+      function el(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
+        return node;
+      }
+
+      async function load() {
+        try {
+          const [takeoffsRes, correctionsRes, reviewsRes] = await Promise.all([
+            fetch("/api/takeoffs"),
+            fetch("/api/corrections"),
+            fetch("/api/reviews"),
+          ]);
+          const { takeoffs } = await takeoffsRes.json();
+          const { corrections } = await correctionsRes.json();
+          const { reviews } = await reviewsRes.json();
+
+          list.innerHTML = "";
+          if (takeoffs.length === 0) {
+            list.textContent = "No takeoffs saved yet. Upload a plan and run one from the upload page.";
+            return;
+          }
+
+          for (const t of takeoffs.slice().reverse()) {
+            list.appendChild(renderCard(
+              t,
+              corrections.filter((c) => c.takeoffId === t.id),
+              reviews.filter((r) => r.takeoffId === t.id)
+            ));
+          }
+        } catch (e) {
+          list.className = "err";
+          list.textContent = `Could not load takeoffs: ${e.message}`;
+        }
+      }
+
+      function renderCard(t, corrections, reviews) {
+        const card = el("div", "card");
+
+        const title = el("h3");
+        title.appendChild(el("span", "value", `${t.value} `));
+        title.querySelector(".value").appendChild(el("span", "unit", t.unit));
+        title.appendChild(document.createTextNode(` — ${t.quantityType.replace(/_/g, " ")}`));
+        card.appendChild(title);
+
+        card.appendChild(el("div", "meta",
+          `${t.fileName} · page ${t.pageNumber || 1} · ${new Date(t.createdAt).toLocaleString()}` +
+          ` · scale: ${t.scale.realDistance} ${t.scale.unit} = ${Math.round(t.scale.pixelDistance)}px`));
+
+        const conf = el("div");
+        conf.appendChild(el("span", `confidence-${t.confidence}`, `Confidence: ${t.confidence}`));
+        card.appendChild(conf);
+        card.appendChild(el("div", "reasons", (t.confidenceReasons || []).join(" ")));
+
+        if (t.note) card.appendChild(el("div", "note", `Note: ${t.note}`));
+
+        const markup = el("div", "markup");
+        const img = document.createElement("img");
+        img.loading = "lazy";
+        img.src = `/uploads/markups/${encodeURIComponent(t.markupFileName)}`;
+        img.alt = "Markup proof";
+        markup.appendChild(img);
+        card.appendChild(markup);
+
+        const approved = reviews.find((r) => r.action === "approved");
+        if (approved) {
+          card.appendChild(el("div", "status approved",
+            `✓ Approved ${new Date(approved.createdAt).toLocaleString()}${approved.who ? ` by ${approved.who}` : ""}`));
+        } else if (corrections.length > 0) {
+          card.appendChild(el("div", "status corrected", "Corrected — see log below"));
+        } else {
+          card.appendChild(el("div", "status unreviewed", "Not yet reviewed"));
+        }
+
+        if (corrections.length > 0) {
+          const ul = el("ul", "corrections");
+          for (const c of corrections) {
+            ul.appendChild(el("li", null,
+              `${c.originalValue} → ${c.correctedValue} ${t.unit} (${new Date(c.createdAt).toLocaleString()})${c.note ? ` — ${c.note}` : ""}`));
+          }
+          card.appendChild(ul);
+        }
+
+        const actions = el("div", "actions");
+
+        if (!approved) {
+          const whoInput = document.createElement("input");
+          whoInput.placeholder = "initials";
+          whoInput.style.width = "5rem";
+          const approveBtn = el("button", null, "Approve");
+          approveBtn.addEventListener("click", async () => {
+            approveBtn.disabled = true;
+            const res = await fetch(`/api/takeoffs/${t.id}/review`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "approved", who: whoInput.value || null }),
+            });
+            if (res.ok) load();
+            else approveBtn.disabled = false;
+          });
+          actions.appendChild(whoInput);
+          actions.appendChild(approveBtn);
+        }
+
+        const corrValue = document.createElement("input");
+        corrValue.type = "number";
+        corrValue.step = "0.01";
+        corrValue.placeholder = "correct value";
+        corrValue.style.width = "8rem";
+        const corrNote = document.createElement("input");
+        corrNote.placeholder = "why";
+        corrNote.style.flex = "1";
+        corrNote.style.minWidth = "10rem";
+        const corrBtn = el("button", "secondary", "Log correction");
+        corrBtn.addEventListener("click", async () => {
+          const correctedValue = parseFloat(corrValue.value);
+          if (!Number.isFinite(correctedValue)) return;
+          corrBtn.disabled = true;
+          const res = await fetch(`/api/takeoffs/${t.id}/corrections`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ correctedValue, note: corrNote.value || null }),
+          });
+          if (res.ok) load();
+          else corrBtn.disabled = false;
+        });
+        actions.appendChild(corrValue);
+        actions.appendChild(corrNote);
+        actions.appendChild(corrBtn);
+
+        card.appendChild(actions);
+        return card;
+      }
+
+      load();
+    </script>
+  </body>
+</html>

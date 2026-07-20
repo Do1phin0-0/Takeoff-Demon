@@ -144,6 +144,7 @@ fs.mkdirSync(MARKUP_DIR, { recursive: true });
 
 const takeoffsStore = makeJsonFileStore(path.join(UPLOAD_DIR, "data", "takeoffs.json"));
 const correctionsStore = makeJsonFileStore(path.join(UPLOAD_DIR, "data", "corrections.json"));
+const reviewsStore = makeJsonFileStore(path.join(UPLOAD_DIR, "data", "reviews.json"));
 
 const ALLOWED_EXTENSIONS = new Set([
   ".pdf",
@@ -542,6 +543,29 @@ app.post("/api/takeoffs/:id/corrections", (req, res) => {
 
 app.get("/api/corrections", (_req, res) => {
   res.json({ corrections: correctionsStore.readAll() });
+});
+
+app.post("/api/takeoffs/:id/review", (req, res) => {
+  const takeoff = takeoffsStore.getById(req.params.id);
+  if (!takeoff) return res.status(404).json({ error: "Takeoff not found." });
+
+  const { action, who, note } = req.body || {};
+  if (action !== "approved") {
+    return res.status(400).json({ error: "action must be 'approved'. To override a value, POST a correction instead." });
+  }
+
+  const record = reviewsStore.append({
+    takeoffId: takeoff.id,
+    action,
+    who: who || null,
+    note: note || null,
+  });
+
+  res.status(201).json(record);
+});
+
+app.get("/api/reviews", (_req, res) => {
+  res.json({ reviews: reviewsStore.readAll() });
 });
 
 app.get("/files", (_req, res) => {
