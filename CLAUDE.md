@@ -255,7 +255,7 @@ Unless explicitly updated by the repository state, assume this is the baseline t
 - Estimating knowledge reference files (`knowledge/`): price list, production rates, trade scopes, easily-missed items, blueprint reading
 - Opt-in HTTP Basic Auth (AUTH_USERNAME/AUTH_PASSWORD, both-or-neither; /health stays open for Render's probe)
 - Upload history persistence (`uploads/manifest.json`) with disk-bounded eviction (MAX_HISTORY_BATCHES / MAX_DISK_BYTES)
-- Test suite — 31 node --test tests (contracts, PDF guards, auth, retention, server) + GitHub Actions CI (npm test + npm audit); npm audit currently reports zero vulnerabilities (pdfjs-dist v6, legacy build for browser compatibility)
+- Test suite — 40 node --test tests (contracts, PDF guards, auth, retention, server, geometry) + GitHub Actions CI (npm test + npm audit); npm audit currently reports zero vulnerabilities (pdfjs-dist v6, legacy build for browser compatibility). `lib/geometry.js` — the module computing the deliverable quantity — previously had no dedicated tests; now covers the untested inches-to-feet calibration path and concave (L-shaped) polygons, not just axis-aligned rectangles
 - Review loop UI — `public/takeoffs.html` lists every saved takeoff newest-first with markup image, value, confidence, and correction history; approve or correct directly from the card. `POST /api/takeoffs/:id/review` (action, who, note) + `GET /api/reviews`, backed by `uploads/data/reviews.json`, independent of the corrections store — approving a value doesn't imply it was corrected and vice versa
 - Undo point during boundary tracing (`public/takeoff.html`) — one mis-click no longer means retracing the whole polygon
 
