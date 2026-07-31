@@ -11,6 +11,7 @@ const Anthropic = require("@anthropic-ai/sdk");
 const { generateSubcontractDocx, FINALIZE_SUBCONTRACT_TOOL } = require("./lib/subcontract");
 const { makeJsonFileStore } = require("./lib/store");
 const { computeSquareFootage, isSelfIntersecting, polygonAreaPixels } = require("./lib/geometry");
+const { buildCorrectionsReport } = require("./lib/report");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -572,6 +573,11 @@ app.post("/api/takeoffs/:id/review", (req, res) => {
 
 app.get("/api/reviews", (_req, res) => {
   res.json({ reviews: reviewsStore.readAll() });
+});
+
+app.get("/api/reports/corrections", (_req, res) => {
+  const report = buildCorrectionsReport(takeoffsStore.readAll(), correctionsStore.readAll(), reviewsStore.readAll());
+  res.json(report);
 });
 
 app.get("/files", (_req, res) => {

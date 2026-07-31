@@ -149,3 +149,16 @@ test("POST /api/takeoffs/:id/review rejects an unknown action and an unknown tak
     .send({ action: "approved" });
   assert.equal(badId.status, 404);
 });
+
+test("GET /api/reports/corrections aggregates corrections and reviews across takeoffs", async () => {
+  const fileName = await uploadOneFile();
+  const saved = (await saveTakeoff(fileName)).body; // value: 400
+
+  await request(app).post(`/api/takeoffs/${saved.id}/corrections`).send({ correctedValue: 380, note: "field-verified" });
+
+  const res = await request(app).get("/api/reports/corrections");
+  assert.equal(res.status, 200);
+  assert.ok(res.body.totals.takeoffsCorrected >= 1);
+  assert.ok(res.body.byQuantityType.square_footage.count >= 1);
+  assert.equal(res.body.recentCorrections[0].fileName, fileName); // most recent correction, newest-first
+});

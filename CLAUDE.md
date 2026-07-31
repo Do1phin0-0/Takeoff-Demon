@@ -255,12 +255,12 @@ Unless explicitly updated by the repository state, assume this is the baseline t
 - Estimating knowledge reference files (`knowledge/`): price list, production rates, trade scopes, easily-missed items, blueprint reading
 - Opt-in HTTP Basic Auth (AUTH_USERNAME/AUTH_PASSWORD, both-or-neither; /health stays open for Render's probe)
 - Upload history persistence (`uploads/manifest.json`) with disk-bounded eviction (MAX_HISTORY_BATCHES / MAX_DISK_BYTES)
-- Test suite — 48 node --test tests (contracts, PDF guards, auth, retention, server, geometry) + GitHub Actions CI (npm test + npm audit); npm audit currently reports zero vulnerabilities (pdfjs-dist v6, legacy build for browser compatibility). `lib/geometry.js` — the module computing the deliverable quantity — previously had no dedicated tests; now covers the untested inches-to-feet calibration path, concave (L-shaped) polygons, and self-intersecting/degenerate polygon rejection
+- Test suite — 56 node --test tests (contracts, PDF guards, auth, retention, server, geometry, report) + GitHub Actions CI (npm test + npm audit); npm audit currently reports zero vulnerabilities (pdfjs-dist v6, legacy build for browser compatibility). `lib/geometry.js` — the module computing the deliverable quantity — previously had no dedicated tests; now covers the untested inches-to-feet calibration path, concave (L-shaped) polygons, and self-intersecting/degenerate polygon rejection
 - Review loop UI — `public/takeoffs.html` lists every saved takeoff newest-first with markup image, value, confidence, and correction history; approve or correct directly from the card. `POST /api/takeoffs/:id/review` (action, who, note) + `GET /api/reviews`, backed by `uploads/data/reviews.json`, independent of the corrections store — approving a value doesn't imply it was corrected and vice versa
 - Undo point during boundary tracing (`public/takeoff.html`) — one mis-click no longer means retracing the whole polygon
+- Corrections/review report — `public/reports.html` + `GET /api/reports/corrections` (`lib/report.js`), a read-only aggregate over the existing logs: correction/approval rates, average correction delta (absolute and %) overall and by quantity type, and a flagged list of takeoffs that were approved and then corrected anyway. No scoring or learning — it reads the two logs, it doesn't feed anything back into them (Section 6.4)
 
 ## Partially built
-- Corrections/review data consumption — corrections and approvals are both logged, but nothing reads across them yet (no aggregate reporting, no learning on top of the log, by design — see Section 6.4 and Section 13)
 - Database-backed audit trail — audit trail exists (JSON store with timestamps), but it's a flat file, not a real database; fine for V1, will not scale past it
 
 ## Not built

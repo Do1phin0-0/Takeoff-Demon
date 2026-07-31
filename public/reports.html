@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Takeoff-Demon — Corrections Report</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+      h1 { margin-bottom: 0.25rem; }
+      h2 { font-size: 1.1rem; margin: 2rem 0 0.5rem; }
+      .nav { margin: 0 0 1rem; font-size: 0.9rem; }
+      .hint { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
+      .stats { display: flex; gap: 1rem; flex-wrap: wrap; }
+      .stat { border: 1px solid #444; border-radius: 8px; padding: 0.8rem 1rem; min-width: 9rem; }
+      .stat .n { font-size: 1.4rem; font-weight: 700; display: block; }
+      .stat .label { color: #666; font-size: 0.8rem; }
+      table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+      th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid #333; }
+      .warn { color: #b91c1c; }
+      .empty { color: #666; font-style: italic; }
+      .err { color: #b91c1c; }
+    </style>
+  </head>
+  <body>
+    <h1>Corrections &amp; Review Report</h1>
+    <p class="nav"><a href="/index.html">← Upload</a> · <a href="/takeoffs.html">Review takeoffs →</a></p>
+    <p class="hint">
+      A read-only rollup of the corrections and review logs — no scoring or learning happens here,
+      it just makes the existing logs visible in aggregate instead of write-only.
+    </p>
+    <div id="body">Loading…</div>
+
+    <script>
+      const body = document.getElementById("body");
+
+      function el(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
+        return node;
+      }
+
+      async function load() {
+        try {
+          const res = await fetch("/api/reports/corrections");
+          const r = await res.json();
+          body.innerHTML = "";
+
+          if (r.totals.takeoffs === 0) {
+            body.appendChild(el("p", "empty", "No takeoffs saved yet."));
+            return;
+          }
+
+          const stats = el("div", "stats");
+          stats.appendChild(stat(r.totals.takeoffs, "Takeoffs"));
+          stats.appendChild(stat(r.totals.takeoffsCorrected, `Corrected (${r.rates.correctionRate}%)`));
+          stats.appendChild(stat(r.totals.takeoffsApproved, `Approved (${r.rates.approvalRate}%)`));
+          stats.appendChild(stat(r.totals.takeoffsUnreviewed, "Never reviewed"));
+          stats.appendChild(stat(r.deltas.avgAbsoluteDelta ?? "—", "Avg correction delta"));
+          stats.appendChild(stat(r.deltas.avgPercentDelta != null ? `${r.deltas.avgPercentDelta}%` : "—", "Avg correction delta %"));
+          body.appendChild(stats);
+
+          body.appendChild(el("h2", null, "By quantity type"));
+          const types = Object.entries(r.byQuantityType);
+          if (types.length === 0) {
+            body.appendChild(el("p", "empty", "No corrections logged yet."));
+          } else {
+            const table = el("table");
+            table.innerHTML = "<tr><th>Type</th><th>Corrections</th><th>Avg delta</th><th>Avg delta %</th></tr>";
+            for (const [type, b] of types) {
+              const row = el("tr");
+              row.appendChild(el("td", null, type.replace(/_/g, " ")));
+              row.appendChild(el("td", null, String(b.count)));
+              row.appendChild(el("td", null, String(b.avgAbsoluteDelta)));
+              row.appendChild(el("td", null, b.avgPercentDelta != null ? `${b.avgPercentDelta}%` : "—"));
+              table.appendChild(row);
+            }
+            body.appendChild(table);
+          }
+
+          body.appendChild(el("h2", null, "Approved, then corrected anyway"));
+          if (r.approvedThenCorrected.length === 0) {
+            body.appendChild(el("p", "empty", "None — no approved value has been overridden after the fact."));
+          } else {
+            const table = el("table");
+            table.innerHTML = "<tr><th>File</th><th>Page</th><th>Approved by</th><th>Original → corrected</th><th>Note</th></tr>";
+            for (const a of r.approvedThenCorrected) {
+              const row = el("tr", "warn");
+              row.appendChild(el("td", null, a.fileName || a.takeoffId));
+              row.appendChild(el("td", null, String(a.pageNumber || "")));
+              row.appendChild(el("td", null, a.approvedBy || "—"));
+              row.appendChild(el("td", null, `${a.originalValue} → ${a.correctedValue}`));
+              row.appendChild(el("td", null, a.note || ""));
+              table.appendChild(row);
+            }
+            body.appendChild(table);
+          }
+
+          body.appendChild(el("h2", null, "Recent corrections"));
+          if (r.recentCorrections.length === 0) {
+            body.appendChild(el("p", "empty", "No corrections logged yet."));
+          } else {
+            const table = el("table");
+            table.innerHTML = "<tr><th>File</th><th>Page</th><th>Original → corrected</th><th>Note</th><th>When</th></tr>";
+            for (const c of r.recentCorrections) {
+              const row = el("tr");
+              row.appendChild(el("td", null, c.fileName || c.takeoffId));
+              row.appendChild(el("td", null, String(c.pageNumber || "")));
+              row.appendChild(el("td", null, `${c.originalValue} → ${c.correctedValue}`));
+              row.appendChild(el("td", null, c.note || ""));
+              row.appendChild(el("td", null, new Date(c.createdAt).toLocaleString()));
+              table.appendChild(row);
+            }
+            body.appendChild(table);
+          }
+        } catch (e) {
+          body.className = "err";
+          body.textContent = `Could not load report: ${e.message}`;
+        }
+      }
+
+      function stat(n, label) {
+        const box = el("div", "stat");
+        box.appendChild(el("span", "n", String(n)));
+        box.appendChild(el("span", "label", label));
+        return box;
+      }
+
+      load();
+    </script>
+  </body>
+</html>
