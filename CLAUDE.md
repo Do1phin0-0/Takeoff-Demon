@@ -4,7 +4,7 @@ Status: active operating layer
 Audience: Claude running inside the AMS Brain / Takeoff-Demon repository
 Incorporates: Core Operating Prompt v1.0 (reconciled — this document is its superset) and Takeoff Execution Layer v1.0 (folded into Sections 10 and 16). This file is the single operating layer; do not create parallel prompt documents.
 
-Maintenance note: Section 8 ("Repo Reality") is a snapshot, not a doctrine. Update it every time a slice ships — a stale baseline here is exactly the failure mode Section 6.1 exists to prevent. Last corrected: after the branch consolidation merge (contracts + AI batch summary + knowledge files + tests folded into main).
+Maintenance note: Section 8 ("Repo Reality") is a snapshot, not a doctrine. Update it every time a slice ships — a stale baseline here is exactly the failure mode Section 6.1 exists to prevent. Last corrected: 2026-07-31, after the review-loop UI shipped (c71fab9) — moved the correction review loop from "Partially built" to "Built" and fixed the test count (24 → 31), which the baseline had missed.
 
 ===============================================================================
 1. IDENTITY AND JOB
@@ -255,10 +255,12 @@ Unless explicitly updated by the repository state, assume this is the baseline t
 - Estimating knowledge reference files (`knowledge/`): price list, production rates, trade scopes, easily-missed items, blueprint reading
 - Opt-in HTTP Basic Auth (AUTH_USERNAME/AUTH_PASSWORD, both-or-neither; /health stays open for Render's probe)
 - Upload history persistence (`uploads/manifest.json`) with disk-bounded eviction (MAX_HISTORY_BATCHES / MAX_DISK_BYTES)
-- Test suite — 24 node --test tests (contracts, PDF guards, auth, retention, server) + GitHub Actions CI (npm test + npm audit); npm audit currently reports zero vulnerabilities (pdfjs-dist v6, legacy build for browser compatibility)
+- Test suite — 31 node --test tests (contracts, PDF guards, auth, retention, server) + GitHub Actions CI (npm test + npm audit); npm audit currently reports zero vulnerabilities (pdfjs-dist v6, legacy build for browser compatibility)
+- Review loop UI — `public/takeoffs.html` lists every saved takeoff newest-first with markup image, value, confidence, and correction history; approve or correct directly from the card. `POST /api/takeoffs/:id/review` (action, who, note) + `GET /api/reviews`, backed by `uploads/data/reviews.json`, independent of the corrections store — approving a value doesn't imply it was corrected and vice versa
+- Undo point during boundary tracing (`public/takeoff.html`) — one mis-click no longer means retracing the whole polygon
 
 ## Partially built
-- Correction review loop — corrections are logged, but there's no UI to browse/report on correction history yet, and nothing consumes it (no learning on top of it, by design — see Section 6.4 and Section 13)
+- Corrections/review data consumption — corrections and approvals are both logged, but nothing reads across them yet (no aggregate reporting, no learning on top of the log, by design — see Section 6.4 and Section 13)
 - Database-backed audit trail — audit trail exists (JSON store with timestamps), but it's a flat file, not a real database; fine for V1, will not scale past it
 
 ## Not built
