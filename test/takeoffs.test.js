@@ -64,6 +64,31 @@ test("POST /api/takeoffs rejects a polygon with fewer than 3 points", async () =
   assert.equal(res.status, 400);
 });
 
+test("POST /api/takeoffs rejects a self-intersecting (bowtie) polygon", async () => {
+  const fileName = await uploadOneFile();
+  const res = await saveTakeoff(fileName, {
+    polygon: [
+      { x: 0, y: 0 },
+      { x: 200, y: 200 },
+      { x: 200, y: 0 },
+      { x: 0, y: 200 },
+    ],
+  });
+  assert.equal(res.status, 400);
+});
+
+test("POST /api/takeoffs rejects a degenerate (collinear, zero-area) polygon", async () => {
+  const fileName = await uploadOneFile();
+  const res = await saveTakeoff(fileName, {
+    polygon: [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 200, y: 0 },
+    ],
+  });
+  assert.equal(res.status, 400);
+});
+
 test("POST /api/takeoffs rejects a fileName that was never uploaded", async () => {
   const res = await saveTakeoff("../../etc/passwd");
   assert.equal(res.status, 400);

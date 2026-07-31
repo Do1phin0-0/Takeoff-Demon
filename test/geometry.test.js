@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { polygonAreaPixels, computeSquareFootage } = require("../lib/geometry");
+const { polygonAreaPixels, computeSquareFootage, isSelfIntersecting } = require("../lib/geometry");
 
 test("polygonAreaPixels: axis-aligned square", () => {
   const area = polygonAreaPixels([
@@ -100,6 +100,84 @@ test("computeSquareFootage: 'in' and equivalent 'ft' calibration produce the sam
   const viaInches = computeSquareFootage(polygon, { pixelDistance: 60, realDistance: 60, unit: "in" }); // 60px = 5ft
   const viaFeet = computeSquareFootage(polygon, { pixelDistance: 60, realDistance: 5, unit: "ft" });
   assert.equal(viaInches.areaSqFt, viaFeet.areaSqFt);
+});
+
+test("isSelfIntersecting: a simple square is not self-intersecting", () => {
+  assert.equal(
+    isSelfIntersecting([
+      { x: 0, y: 0 },
+      { x: 200, y: 0 },
+      { x: 200, y: 200 },
+      { x: 0, y: 200 },
+    ]),
+    false
+  );
+});
+
+test("isSelfIntersecting: an L-shaped concave room is not self-intersecting", () => {
+  assert.equal(
+    isSelfIntersecting([
+      { x: 0, y: 0 },
+      { x: 200, y: 0 },
+      { x: 200, y: 100 },
+      { x: 100, y: 100 },
+      { x: 100, y: 200 },
+      { x: 0, y: 200 },
+    ]),
+    false
+  );
+});
+
+test("isSelfIntersecting: a triangle can never self-intersect", () => {
+  assert.equal(
+    isSelfIntersecting([
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 0, y: 100 },
+    ]),
+    false
+  );
+});
+
+test("isSelfIntersecting: a bowtie quad (crossed edges) is detected", () => {
+  // Points ordered so edge 0->1 crosses edge 2->3.
+  assert.equal(
+    isSelfIntersecting([
+      { x: 0, y: 0 },
+      { x: 200, y: 200 },
+      { x: 200, y: 0 },
+      { x: 0, y: 200 },
+    ]),
+    true
+  );
+});
+
+test("isSelfIntersecting: a non-adjacent-edge crossing in a hexagon is detected", () => {
+  // Edge 0-1 ((0,0)-(100,100)) crosses edge 3-4 ((50,100)-(150,0)) at (75,75);
+  // neither edge shares a vertex with the other.
+  assert.equal(
+    isSelfIntersecting([
+      { x: 0, y: 0 },
+      { x: 100, y: 100 },
+      { x: 200, y: 150 },
+      { x: 50, y: 100 },
+      { x: 150, y: 0 },
+      { x: -50, y: 150 },
+    ]),
+    true
+  );
+});
+
+test("polygonAreaPixels: a bowtie silently returns the wrong (difference, not sum) area — why the guard exists", () => {
+  // Two 100x100 triangles overlapping at a point; shoelace on the crossed
+  // ordering gives the difference of the lobes, not 100x100=10000 or the sum.
+  const area = polygonAreaPixels([
+    { x: 0, y: 0 },
+    { x: 200, y: 200 },
+    { x: 200, y: 0 },
+    { x: 0, y: 200 },
+  ]);
+  assert.notEqual(area, 40000); // NOT the honest square footage of the traced outline
 });
 
 test("computeSquareFootage: L-shaped room with an 'in' calibration", () => {

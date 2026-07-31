@@ -4,7 +4,7 @@ Status: active operating layer
 Audience: Claude running inside the AMS Brain / Takeoff-Demon repository
 Incorporates: Core Operating Prompt v1.0 (reconciled — this document is its superset) and Takeoff Execution Layer v1.0 (folded into Sections 10 and 16). This file is the single operating layer; do not create parallel prompt documents.
 
-Maintenance note: Section 8 ("Repo Reality") is a snapshot, not a doctrine. Update it every time a slice ships — a stale baseline here is exactly the failure mode Section 6.1 exists to prevent. Last corrected: 2026-07-31, after the review-loop UI shipped (c71fab9) — moved the correction review loop from "Partially built" to "Built" and fixed the test count (24 → 31), which the baseline had missed.
+Maintenance note: Section 8 ("Repo Reality") is a snapshot, not a doctrine. Update it every time a slice ships — a stale baseline here is exactly the failure mode Section 6.1 exists to prevent. Last corrected: 2026-07-31 — moved the correction review loop from "Partially built" to "Built", added self-intersecting/degenerate polygon rejection to `lib/geometry.js`, and kept the test count current (24 → 31 → 40 → 48) as each slice landed.
 
 ===============================================================================
 1. IDENTITY AND JOB
@@ -244,7 +244,7 @@ Unless explicitly updated by the repository state, assume this is the baseline t
 - Verified against a real plan: BBD Grand Prairie TI A-set (23 sheets, Bluebeam-produced, Arch E1) — dining-area trace on sheet A211 at printed 1/4"=1'-0" scale matched independent computation within 0.04%
 - Manual two-point scale calibration against a known dimension
 - Manual room-boundary tracing on canvas
-- Square-footage quantity computation — computed and independently verified server-side (`lib/geometry.js`), never trusted from the client
+- Square-footage quantity computation — computed and independently verified server-side (`lib/geometry.js`), never trusted from the client. Self-intersecting ("bowtie") polygons and degenerate (collinear, zero-area) polygons are rejected at `POST /api/takeoffs` (400) before a quantity is ever computed from them — a crossed trace previously produced a silently wrong area (the shoelace difference of the two lobes, not the honest outline) instead of an error
 - Markup generation — canvas snapshot (calibration line + traced polygon over the source plan) saved as visual proof per takeoff
 - Confidence scoring with stated reasoning (currently capped at "medium" — no automated cross-check exists yet, so it says so)
 - Persistence for takeoff results — JSON-file-backed store (`lib/store.js`, `uploads/data/takeoffs.json`)
@@ -255,7 +255,7 @@ Unless explicitly updated by the repository state, assume this is the baseline t
 - Estimating knowledge reference files (`knowledge/`): price list, production rates, trade scopes, easily-missed items, blueprint reading
 - Opt-in HTTP Basic Auth (AUTH_USERNAME/AUTH_PASSWORD, both-or-neither; /health stays open for Render's probe)
 - Upload history persistence (`uploads/manifest.json`) with disk-bounded eviction (MAX_HISTORY_BATCHES / MAX_DISK_BYTES)
-- Test suite — 40 node --test tests (contracts, PDF guards, auth, retention, server, geometry) + GitHub Actions CI (npm test + npm audit); npm audit currently reports zero vulnerabilities (pdfjs-dist v6, legacy build for browser compatibility). `lib/geometry.js` — the module computing the deliverable quantity — previously had no dedicated tests; now covers the untested inches-to-feet calibration path and concave (L-shaped) polygons, not just axis-aligned rectangles
+- Test suite — 48 node --test tests (contracts, PDF guards, auth, retention, server, geometry) + GitHub Actions CI (npm test + npm audit); npm audit currently reports zero vulnerabilities (pdfjs-dist v6, legacy build for browser compatibility). `lib/geometry.js` — the module computing the deliverable quantity — previously had no dedicated tests; now covers the untested inches-to-feet calibration path, concave (L-shaped) polygons, and self-intersecting/degenerate polygon rejection
 - Review loop UI — `public/takeoffs.html` lists every saved takeoff newest-first with markup image, value, confidence, and correction history; approve or correct directly from the card. `POST /api/takeoffs/:id/review` (action, who, note) + `GET /api/reviews`, backed by `uploads/data/reviews.json`, independent of the corrections store — approving a value doesn't imply it was corrected and vice versa
 - Undo point during boundary tracing (`public/takeoff.html`) — one mis-click no longer means retracing the whole polygon
 
