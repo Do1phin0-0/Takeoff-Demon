@@ -64,6 +64,31 @@ test("POST /api/takeoffs rejects a polygon with fewer than 3 points", async () =
   assert.equal(res.status, 400);
 });
 
+test("POST /api/takeoffs rejects a self-intersecting (bowtie) polygon", async () => {
+  const fileName = await uploadOneFile();
+  const res = await saveTakeoff(fileName, {
+    polygon: [
+      { x: 0, y: 0 },
+      { x: 200, y: 200 },
+      { x: 200, y: 0 },
+      { x: 0, y: 200 },
+    ],
+  });
+  assert.equal(res.status, 400);
+});
+
+test("POST /api/takeoffs rejects a degenerate (collinear, zero-area) polygon", async () => {
+  const fileName = await uploadOneFile();
+  const res = await saveTakeoff(fileName, {
+    polygon: [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 200, y: 0 },
+    ],
+  });
+  assert.equal(res.status, 400);
+});
+
 test("POST /api/takeoffs rejects a fileName that was never uploaded", async () => {
   const res = await saveTakeoff("../../etc/passwd");
   assert.equal(res.status, 400);
@@ -123,4 +148,17 @@ test("POST /api/takeoffs/:id/review rejects an unknown action and an unknown tak
     .post("/api/takeoffs/does-not-exist/review")
     .send({ action: "approved" });
   assert.equal(badId.status, 404);
+});
+
+test("GET /api/reports/corrections aggregates corrections and reviews across takeoffs", async () => {
+  const fileName = await uploadOneFile();
+  const saved = (await saveTakeoff(fileName)).body; // value: 400
+
+  await request(app).post(`/api/takeoffs/${saved.id}/corrections`).send({ correctedValue: 380, note: "field-verified" });
+
+  const res = await request(app).get("/api/reports/corrections");
+  assert.equal(res.status, 200);
+  assert.ok(res.body.totals.takeoffsCorrected >= 1);
+  assert.ok(res.body.byQuantityType.square_footage.count >= 1);
+  assert.equal(res.body.recentCorrections[0].fileName, fileName); // most recent correction, newest-first
 });

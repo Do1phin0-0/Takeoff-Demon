@@ -10,7 +10,8 @@ const { PDFDocument } = require("pdf-lib");
 const Anthropic = require("@anthropic-ai/sdk");
 const { generateSubcontractDocx, FINALIZE_SUBCONTRACT_TOOL } = require("./lib/subcontract");
 const { makeJsonFileStore } = require("./lib/store");
-const { computeSquareFootage } = require("./lib/geometry");
+const { computeSquareFootage, isSelfIntersecting, polygonAreaPixels } = require("./lib/geometry");
+const { buildCorrectionsReport } = require("./lib/report");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -476,6 +477,12 @@ app.post("/api/takeoffs", (req, res) => {
   if (!Array.isArray(polygon) || polygon.length < 3 || !polygon.every((p) => typeof p.x === "number" && typeof p.y === "number")) {
     return res.status(400).json({ error: "polygon must be an array of at least 3 {x,y} points." });
   }
+  if (isSelfIntersecting(polygon)) {
+    return res.status(400).json({ error: "Polygon edges cross themselves — retrace the boundary without crossing lines." });
+  }
+  if (polygonAreaPixels(polygon) < 1e-6) {
+    return res.status(400).json({ error: "Polygon has zero area (points are collinear) — not a valid boundary." });
+  }
   const markupBuffer = decodeDataUrlPng(markupImage);
   if (!markupBuffer) {
     return res.status(400).json({ error: "markupImage must be a PNG data URL (visual proof is required)." });
@@ -566,6 +573,11 @@ app.post("/api/takeoffs/:id/review", (req, res) => {
 
 app.get("/api/reviews", (_req, res) => {
   res.json({ reviews: reviewsStore.readAll() });
+});
+
+app.get("/api/reports/corrections", (_req, res) => {
+  const report = buildCorrectionsReport(takeoffsStore.readAll(), correctionsStore.readAll(), reviewsStore.readAll());
+  res.json(report);
 });
 
 app.get("/files", (_req, res) => {
