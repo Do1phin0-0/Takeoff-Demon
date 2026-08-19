@@ -4,37 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Takeoff-Demon — Review Takeoffs</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="/theme.css" />
     <style>
-      :root { color-scheme: light dark; }
-      body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
-      h1 { margin-bottom: 0.25rem; }
-      .nav { margin: 0 0 1rem; font-size: 0.9rem; }
-      .hint { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
-      .card { border: 1px solid #444; border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem; }
-      .card h3 { margin: 0 0 0.25rem; font-size: 1.05rem; }
-      .meta { color: #666; font-size: 0.8rem; margin-bottom: 0.6rem; }
-      .value { font-size: 1.3rem; font-weight: 700; }
-      .value .unit { font-size: 0.9rem; font-weight: 400; color: #666; }
-      .confidence-medium { color: #a86a00; font-weight: 600; }
-      .confidence-low, .confidence-invalid { color: #b91c1c; font-weight: 600; }
-      .reasons { color: #666; font-size: 0.85rem; margin: 0.3rem 0 0.6rem; }
-      .markup img { max-width: 100%; border: 1px solid #888; border-radius: 4px; margin: 0.5rem 0; }
-      .status { font-size: 0.85rem; margin: 0.4rem 0; }
-      .status.approved { color: #1a7f37; font-weight: 600; }
-      .status.corrected { color: #a86a00; font-weight: 600; }
-      .status.unreviewed { color: #666; }
-      .corrections { font-size: 0.85rem; margin: 0.4rem 0; }
-      .corrections li { margin-bottom: 0.2rem; }
-      .actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.6rem; }
-      button { padding: 0.45rem 0.8rem; font-size: 0.9rem; cursor: pointer; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff; }
-      button.secondary { background: transparent; color: inherit; }
-      button:disabled { opacity: 0.5; cursor: not-allowed; }
-      input { padding: 0.4rem; border-radius: 4px; border: 1px solid #888; }
-      .note { font-style: italic; color: #666; font-size: 0.85rem; }
-      .err { color: #b91c1c; }
+      body { max-width: 980px; }
     </style>
   </head>
   <body>
+    <div class="brand">
+      <svg width="16" height="16" viewBox="0 0 32 32" fill="none"><path d="M7 26 L7 13 L16 13 L16 6 L25 6 L25 26 Z" stroke="#e2664f" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/><circle cx="7" cy="26" r="2.2" fill="#e2664f"/></svg>
+      Takeoff-Demon
+    </div>
     <h1>Review Takeoffs</h1>
     <p class="nav"><a href="/index.html">← Upload</a> · <a href="/reports.html">Corrections report →</a></p>
     <p class="hint">
