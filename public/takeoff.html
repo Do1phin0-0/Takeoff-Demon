@@ -211,9 +211,11 @@
       const fullscreenToggle = document.getElementById("fullscreenToggle");
       fullscreenToggle.addEventListener("click", () => {
         if (document.fullscreenElement || document.webkitFullscreenElement) {
-          (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+          const exitFn = document.exitFullscreen || document.webkitExitFullscreen;
+          if (exitFn) exitFn.call(document);
         } else {
-          (canvasWrap.requestFullscreen || canvasWrap.webkitRequestFullscreen).call(canvasWrap);
+          const requestFn = canvasWrap.requestFullscreen || canvasWrap.webkitRequestFullscreen;
+          if (requestFn) requestFn.call(canvasWrap);
         }
       });
       const updateFullscreenLabel = () => {
