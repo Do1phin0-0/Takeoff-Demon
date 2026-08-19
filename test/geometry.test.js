@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { polygonAreaPixels, computeSquareFootage, isSelfIntersecting } = require("../lib/geometry");
+const { polygonAreaPixels, polylineLengthPixels, computeSquareFootage, computeLinearFootage, isSelfIntersecting } = require("../lib/geometry");
 
 test("polygonAreaPixels: axis-aligned square", () => {
   const area = polygonAreaPixels([
@@ -178,6 +178,51 @@ test("polygonAreaPixels: a bowtie silently returns the wrong (difference, not su
     { x: 0, y: 200 },
   ]);
   assert.notEqual(area, 40000); // NOT the honest square footage of the traced outline
+});
+
+test("polylineLengthPixels: a straight 3-4-5 segment", () => {
+  const length = polylineLengthPixels([
+    { x: 0, y: 0 },
+    { x: 300, y: 0 },
+    { x: 300, y: 400 },
+  ]);
+  assert.equal(length, 700); // 300 + 400
+});
+
+test("polylineLengthPixels: does NOT wrap around back to the first point (open path, not a closed loop)", () => {
+  const length = polylineLengthPixels([
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 100 },
+    { x: 0, y: 100 },
+  ]);
+  assert.equal(length, 300); // 100 + 100 + 100, NOT +100 back to start
+});
+
+test("polylineLengthPixels: a single point has zero length", () => {
+  assert.equal(polylineLengthPixels([{ x: 5, y: 5 }]), 0);
+});
+
+test("computeLinearFootage: unit 'ft' — 100px = 10ft, a 250px run", () => {
+  const { lengthFt } = computeLinearFootage(
+    [
+      { x: 0, y: 0 },
+      { x: 250, y: 0 },
+    ],
+    { pixelDistance: 100, realDistance: 10, unit: "ft" }
+  );
+  assert.equal(lengthFt, 25);
+});
+
+test("computeLinearFootage: 'in' and equivalent 'ft' calibration produce the same length", () => {
+  const polyline = [
+    { x: 0, y: 0 },
+    { x: 60, y: 0 },
+    { x: 60, y: 90 },
+  ];
+  const viaInches = computeLinearFootage(polyline, { pixelDistance: 60, realDistance: 60, unit: "in" }); // 60px = 5ft
+  const viaFeet = computeLinearFootage(polyline, { pixelDistance: 60, realDistance: 5, unit: "ft" });
+  assert.equal(viaInches.lengthFt, viaFeet.lengthFt);
 });
 
 test("computeSquareFootage: L-shaped room with an 'in' calibration", () => {
