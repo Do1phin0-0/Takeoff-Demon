@@ -12,6 +12,7 @@
     </style>
   </head>
   <body>
+    <div class="bg-scatter" id="bgScatter" aria-hidden="true"></div>
     <div class="brand">
       <svg width="16" height="16" viewBox="0 0 32 32" fill="none"><path d="M7 26 L7 13 L16 13 L16 6 L25 6 L25 26 Z" stroke="#e2664f" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/><circle cx="7" cy="26" r="2.2" fill="#e2664f"/></svg>
       Takeoff-Demon
@@ -44,6 +45,28 @@
       const submit = document.getElementById("submit");
       const result = document.getElementById("result");
       const history = document.getElementById("history");
+
+      // Decorative only: a faint field of takeoff-shaped figures behind the
+      // upload flow. No takeoff data — just tokens in the shape real values take.
+      (function renderBackgroundScatter() {
+        const el = document.getElementById("bgScatter");
+        const tokens = [
+          "412.6", "1/4\"=1'-0\"", "26'-4\"", "SF", "A211", "0.03%", "14'-8\"",
+          "48", "96", "204.2", "1:48", "12'-0\"", "SHEET 01", "162", "325.9",
+          "8.25%", "23", "A-SET", "7.5", "88.2",
+        ];
+        const frag = document.createDocumentFragment();
+        for (let i = 0; i < 70; i++) {
+          const span = document.createElement("span");
+          span.textContent = tokens[Math.floor(Math.random() * tokens.length)];
+          span.style.left = `${Math.random() * 100}%`;
+          span.style.top = `${Math.random() * 100}%`;
+          span.style.fontSize = `${9 + Math.round(Math.random() * 3)}px`;
+          span.style.opacity = (0.035 + Math.random() * 0.05).toFixed(3);
+          frag.appendChild(span);
+        }
+        el.appendChild(frag);
+      })();
 
       function renderBatch(batch) {
         const card = document.createElement("div");

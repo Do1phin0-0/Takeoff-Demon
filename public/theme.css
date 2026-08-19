@@ -182,3 +182,7 @@ dialog { border-radius: 8px; border: 1px solid var(--border); padding: 1rem; bac
 form { display: flex; gap: 0.5rem; }
 textarea { flex: 1; resize: vertical; min-height: 2.5rem; }
 .done-card a { font-weight: 600; }
+
+/* index.html: faint background field of takeoff figures, decorative only */
+.bg-scatter { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.bg-scatter span { position: absolute; color: var(--accent); font-family: var(--font-mono); white-space: nowrap; }
