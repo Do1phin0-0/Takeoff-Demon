@@ -4,7 +4,7 @@ Status: active operating layer
 Audience: Claude running inside the AMS Brain / Takeoff-Demon repository
 Incorporates: Core Operating Prompt v1.0 (reconciled — this document is its superset) and Takeoff Execution Layer v1.0 (folded into Sections 10 and 16). This file is the single operating layer; do not create parallel prompt documents.
 
-Maintenance note: Section 8 ("Repo Reality") is a snapshot, not a doctrine. Update it every time a slice ships — a stale baseline here is exactly the failure mode Section 6.1 exists to prevent. Last corrected: 2026-07-31 — moved the correction review loop from "Partially built" to "Built", added self-intersecting/degenerate polygon rejection to `lib/geometry.js`, and kept the test count current (24 → 31 → 40 → 48) as each slice landed.
+Maintenance note: Section 8 ("Repo Reality") is a snapshot, not a doctrine. Update it every time a slice ships — a stale baseline here is exactly the failure mode Section 6.1 exists to prevent. Last corrected: 2026-08-19 — added the visual redesign (`public/theme.css`, `public/favicon.svg`) applied across all 5 pages; test count unchanged at 56 (cosmetic-only change, verified with the full suite plus a headless-browser pass on every page).
 
 ===============================================================================
 1. IDENTITY AND JOB
@@ -259,6 +259,7 @@ Unless explicitly updated by the repository state, assume this is the baseline t
 - Review loop UI — `public/takeoffs.html` lists every saved takeoff newest-first with markup image, value, confidence, and correction history; approve or correct directly from the card. `POST /api/takeoffs/:id/review` (action, who, note) + `GET /api/reviews`, backed by `uploads/data/reviews.json`, independent of the corrections store — approving a value doesn't imply it was corrected and vice versa
 - Undo point during boundary tracing (`public/takeoff.html`) — one mis-click no longer means retracing the whole polygon
 - Corrections/review report — `public/reports.html` + `GET /api/reports/corrections` (`lib/report.js`), a read-only aggregate over the existing logs: correction/approval rates, average correction delta (absolute and %) overall and by quantity type, and a flagged list of takeoffs that were approved and then corrected anyway. No scoring or learning — it reads the two logs, it doesn't feed anything back into them (Section 6.4)
+- Visual identity — `public/theme.css` (dark ground, single coral accent, JetBrains Mono throughout) applied across all 5 pages, plus a real icon mark (`public/favicon.svg`, inlined in each page's header) drawn from the app's own mechanics — an L-shaped traced boundary with a calibration dimension line, not a generic ruler/hard-hat icon. Every element ID and class the existing JS depends on (`getElementById`, `.confidence-*`, `.status.*`, etc.) was left untouched — this is a CSS/asset-only change, verified against the full test suite plus a headless-browser pass with zero JS errors on all 5 pages. Canvas drawing colors inside `takeoff.html` (blue calibration line, green traced polygon) are untouched — those are functional, drawn by JS, not themed chrome
 
 ## Partially built
 - Database-backed audit trail — audit trail exists (JSON store with timestamps), but it's a flat file, not a real database; fine for V1, will not scale past it

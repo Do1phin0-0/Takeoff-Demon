@@ -4,29 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Takeoff-Demon — Upload</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="/theme.css" />
     <style>
-      :root { color-scheme: light dark; }
-      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
-      h1 { margin-bottom: 0.25rem; }
-      h2 { font-size: 1.1rem; margin: 2rem 0 0.75rem; }
-      .nav { margin: 0 0 1rem; font-size: 0.9rem; }
-      .hint { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
-      form { display: flex; flex-direction: column; gap: 1rem; }
-      input[type="file"] { padding: 0.5rem; border: 1px dashed #888; border-radius: 6px; }
-      button { padding: 0.6rem 1rem; font-size: 1rem; cursor: pointer; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff; }
-      button:disabled { opacity: 0.6; cursor: not-allowed; }
-      #result { margin-top: 1.5rem; }
-      .err { color: #b91c1c; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 0.85rem; }
-      .batch-card { border: 1px solid #444; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
-      .batch-card h3 { margin: 0 0 0.5rem; font-size: 1rem; }
-      .batch-meta { color: #666; font-size: 0.8rem; margin-bottom: 0.75rem; }
-      .file-list { color: #666; font-size: 0.8rem; margin-bottom: 0.75rem; }
-      .analysis { white-space: pre-wrap; font-size: 0.9rem; }
-      .analysis.skipped, .analysis.error { color: #b45309; font-style: italic; }
-      .skipped-note { color: #b45309; font-size: 0.8rem; margin-top: 0.5rem; font-style: italic; }
+      body { max-width: 640px; }
     </style>
   </head>
   <body>
+    <div class="bg-scatter" id="bgScatter" aria-hidden="true"></div>
+    <div class="brand">
+      <svg width="16" height="16" viewBox="0 0 32 32" fill="none"><path d="M7 26 L7 13 L16 13 L16 6 L25 6 L25 26 Z" stroke="#e2664f" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/><circle cx="7" cy="26" r="2.2" fill="#e2664f"/></svg>
+      Takeoff-Demon
+    </div>
     <h1>Takeoff-Demon</h1>
     <p class="nav"><a href="/takeoffs.html">Review takeoffs →</a> · <a href="/reports.html">Corrections report →</a> · <a href="/contract">Draft a subcontract →</a></p>
     <p class="hint">
@@ -55,6 +45,28 @@
       const submit = document.getElementById("submit");
       const result = document.getElementById("result");
       const history = document.getElementById("history");
+
+      // Decorative only: a faint field of takeoff-shaped figures behind the
+      // upload flow. No takeoff data — just tokens in the shape real values take.
+      (function renderBackgroundScatter() {
+        const el = document.getElementById("bgScatter");
+        const tokens = [
+          "412.6", "1/4\"=1'-0\"", "26'-4\"", "SF", "A211", "0.03%", "14'-8\"",
+          "48", "96", "204.2", "1:48", "12'-0\"", "SHEET 01", "162", "325.9",
+          "8.25%", "23", "A-SET", "7.5", "88.2",
+        ];
+        const frag = document.createDocumentFragment();
+        for (let i = 0; i < 70; i++) {
+          const span = document.createElement("span");
+          span.textContent = tokens[Math.floor(Math.random() * tokens.length)];
+          span.style.left = `${Math.random() * 100}%`;
+          span.style.top = `${Math.random() * 100}%`;
+          span.style.fontSize = `${9 + Math.round(Math.random() * 3)}px`;
+          span.style.opacity = (0.035 + Math.random() * 0.05).toFixed(3);
+          frag.appendChild(span);
+        }
+        el.appendChild(frag);
+      })();
 
       function renderBatch(batch) {
         const card = document.createElement("div");
