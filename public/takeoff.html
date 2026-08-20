@@ -31,8 +31,12 @@
 
     <div class="steps">
       <span class="step" id="step1">1. Calibrate scale</span>
-      <span class="step" id="step2">2. Trace boundary</span>
+      <span class="step" id="step2">2. Measure</span>
       <span class="step" id="step3">3. Save</span>
+    </div>
+
+    <div class="controls">
+      <button class="secondary" id="fullscreenToggle">⛶ Full screen</button>
     </div>
 
     <div id="canvasWrap">
@@ -49,17 +53,19 @@
 
     <div class="controls" id="traceControls" style="display:none">
       <span id="traceHint">Click points around the room boundary, then close the shape.</span>
-      <button id="closeShape" disabled>Close shape</button>
+      <button id="finishTrace" disabled>Close shape</button>
       <button class="secondary" id="undoPoint" disabled>Undo point</button>
       <button class="secondary" id="resetTrace">Reset</button>
     </div>
 
     <div class="controls" id="startTraceControls" style="display:none">
-      <button id="startTrace">Start tracing boundary</button>
+      <span>Choose a tool:</span>
+      <button id="startArea">Trace area (sq ft)</button>
+      <button id="startLength">Measure length (linear ft)</button>
     </div>
 
     <div class="controls" id="saveControls" style="display:none">
-      <span id="areaSummary"></span>
+      <span id="quantitySummary"></span>
       <input type="text" id="note" placeholder="optional note" style="flex:1;min-width:12rem" />
       <button id="saveTakeoff">Save takeoff</button>
     </div>
@@ -82,6 +88,7 @@
       let calibration = null; // {pixelDistance, realDistance, unit}
       let tracePoints = [];
       let closedPolygon = null;
+      let activeQuantityType = null; // "square_footage" | "linear_footage"
       let pdfDoc = null;
       let currentPage = Math.max(1, parseInt(params.get("page"), 10) || 1);
       let totalPages = 1;
@@ -168,12 +175,14 @@
           calibration = null;
           tracePoints = [];
           closedPolygon = null;
+          activeQuantityType = null;
           mode = "calibrating";
           document.getElementById("confirmCalibration").disabled = true;
           document.getElementById("calibrateControls").style.display = "flex";
           document.getElementById("startTraceControls").style.display = "none";
           document.getElementById("traceControls").style.display = "none";
           document.getElementById("saveControls").style.display = "none";
+          document.getElementById("step2").textContent = "2. Measure";
           ["step1", "step2", "step3"].forEach((id) => {
             document.getElementById(id).classList.remove("active", "done");
           });
@@ -197,6 +206,24 @@
         mode = "calibrating";
         canvas.addEventListener("click", onCanvasClick);
       }
+
+      const canvasWrap = document.getElementById("canvasWrap");
+      const fullscreenToggle = document.getElementById("fullscreenToggle");
+      fullscreenToggle.addEventListener("click", () => {
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+          const exitFn = document.exitFullscreen || document.webkitExitFullscreen;
+          if (exitFn) exitFn.call(document);
+        } else {
+          const requestFn = canvasWrap.requestFullscreen || canvasWrap.webkitRequestFullscreen;
+          if (requestFn) requestFn.call(canvasWrap);
+        }
+      });
+      const updateFullscreenLabel = () => {
+        const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+        fullscreenToggle.textContent = isFullscreen ? "⛶ Exit full screen" : "⛶ Full screen";
+      };
+      document.addEventListener("fullscreenchange", updateFullscreenLabel);
+      document.addEventListener("webkitfullscreenchange", updateFullscreenLabel);
 
       function redraw() {
         ctx.putImageData(sourceImage, 0, 0);
@@ -223,13 +250,16 @@
 
         const pts = closedPolygon || tracePoints;
         if (pts.length > 0) {
+          const isClosedArea = Boolean(closedPolygon) && activeQuantityType === "square_footage";
           ctx.strokeStyle = "#16a34a";
-          ctx.fillStyle = "rgba(22,163,74,0.25)";
           ctx.lineWidth = 2;
           ctx.beginPath();
           pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-          if (closedPolygon) ctx.closePath();
-          if (closedPolygon) ctx.fill();
+          if (isClosedArea) {
+            ctx.closePath();
+            ctx.fillStyle = "rgba(22,163,74,0.25)";
+            ctx.fill();
+          }
           ctx.stroke();
           ctx.fillStyle = "#16a34a";
           pts.forEach((p) => {
@@ -266,7 +296,8 @@
         } else if (mode === "tracing") {
           tracePoints.push(p);
           redraw();
-          document.getElementById("closeShape").disabled = tracePoints.length < 3;
+          const minPoints = activeQuantityType === "linear_footage" ? 2 : 3;
+          document.getElementById("finishTrace").disabled = tracePoints.length < minPoints;
           document.getElementById("undoPoint").disabled = tracePoints.length === 0;
         }
       }
@@ -299,23 +330,33 @@
         redraw();
       });
 
-      document.getElementById("startTrace").addEventListener("click", () => {
+      function startTracing(quantityType) {
+        activeQuantityType = quantityType;
         mode = "tracing";
         tracePoints = [];
         closedPolygon = null;
-        document.getElementById("closeShape").disabled = true;
+        const isArea = quantityType === "square_footage";
+        document.getElementById("traceHint").textContent = isArea
+          ? "Click points around the room boundary, then close the shape."
+          : "Click points along the length to measure, then finish the line.";
+        document.getElementById("finishTrace").textContent = isArea ? "Close shape" : "Finish line";
+        document.getElementById("finishTrace").disabled = true;
         document.getElementById("undoPoint").disabled = true;
+        document.getElementById("step2").textContent = isArea ? "2. Trace boundary" : "2. Measure length";
         document.getElementById("step2").classList.add("active");
         document.getElementById("startTraceControls").style.display = "none";
         document.getElementById("traceControls").style.display = "flex";
         document.getElementById("saveControls").style.display = "none";
         redraw();
-      });
+      }
+      document.getElementById("startArea").addEventListener("click", () => startTracing("square_footage"));
+      document.getElementById("startLength").addEventListener("click", () => startTracing("linear_footage"));
 
       document.getElementById("undoPoint").addEventListener("click", () => {
         if (closedPolygon || tracePoints.length === 0) return;
         tracePoints.pop();
-        document.getElementById("closeShape").disabled = tracePoints.length < 3;
+        const minPoints = activeQuantityType === "linear_footage" ? 2 : 3;
+        document.getElementById("finishTrace").disabled = tracePoints.length < minPoints;
         document.getElementById("undoPoint").disabled = tracePoints.length === 0;
         redraw();
       });
@@ -323,14 +364,15 @@
       document.getElementById("resetTrace").addEventListener("click", () => {
         tracePoints = [];
         closedPolygon = null;
-        document.getElementById("closeShape").disabled = true;
+        document.getElementById("finishTrace").disabled = true;
         document.getElementById("undoPoint").disabled = true;
         document.getElementById("saveControls").style.display = "none";
         redraw();
       });
 
-      document.getElementById("closeShape").addEventListener("click", () => {
-        if (tracePoints.length < 3) return;
+      document.getElementById("finishTrace").addEventListener("click", () => {
+        const minPoints = activeQuantityType === "linear_footage" ? 2 : 3;
+        if (tracePoints.length < minPoints) return;
         closedPolygon = tracePoints.slice();
         mode = "idle";
         document.getElementById("step2").classList.remove("active");
@@ -339,7 +381,7 @@
         document.getElementById("traceControls").style.display = "none";
         document.getElementById("saveControls").style.display = "flex";
         redraw();
-        showAreaPreview();
+        showQuantityPreview();
       });
 
       function polygonAreaPixels(points) {
@@ -352,11 +394,22 @@
         return Math.abs(sum) / 2;
       }
 
-      function showAreaPreview() {
+      function polylineLengthPixels(points) {
+        let sum = 0;
+        for (let i = 0; i < points.length - 1; i++) sum += dist(points[i], points[i + 1]);
+        return sum;
+      }
+
+      function showQuantityPreview() {
         const feetPerUnit = calibration.unit === "in" ? 1 / 12 : 1;
         const feetPerPixel = (calibration.realDistance * feetPerUnit) / calibration.pixelDistance;
-        const areaSqFt = polygonAreaPixels(closedPolygon) * feetPerPixel * feetPerPixel;
-        document.getElementById("areaSummary").textContent = `≈ ${areaSqFt.toFixed(1)} sq ft (server will recompute and score confidence)`;
+        if (activeQuantityType === "square_footage") {
+          const areaSqFt = polygonAreaPixels(closedPolygon) * feetPerPixel * feetPerPixel;
+          document.getElementById("quantitySummary").textContent = `≈ ${areaSqFt.toFixed(1)} sq ft (server will recompute and score confidence)`;
+        } else {
+          const lengthFt = polylineLengthPixels(closedPolygon) * feetPerPixel;
+          document.getElementById("quantitySummary").textContent = `≈ ${lengthFt.toFixed(1)} ft (server will recompute and score confidence)`;
+        }
       }
 
       document.getElementById("saveTakeoff").addEventListener("click", async () => {
@@ -366,7 +419,7 @@
         const payload = {
           fileName,
           pageNumber: currentPage,
-          quantityType: "square_footage",
+          quantityType: activeQuantityType,
           scale: calibration,
           polygon: closedPolygon,
           markupImage,

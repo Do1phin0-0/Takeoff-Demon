@@ -4,7 +4,7 @@ Status: active operating layer
 Audience: Claude running inside the AMS Brain / Takeoff-Demon repository
 Incorporates: Core Operating Prompt v1.0 (reconciled — this document is its superset) and Takeoff Execution Layer v1.0 (folded into Sections 10 and 16). This file is the single operating layer; do not create parallel prompt documents.
 
-Maintenance note: Section 8 ("Repo Reality") is a snapshot, not a doctrine. Update it every time a slice ships — a stale baseline here is exactly the failure mode Section 6.1 exists to prevent. Last corrected: 2026-08-19 — added the visual redesign (`public/theme.css`, `public/favicon.svg`) applied across all 5 pages; test count unchanged at 56 (cosmetic-only change, verified with the full suite plus a headless-browser pass on every page).
+Maintenance note: Section 8 ("Repo Reality") is a snapshot, not a doctrine. Update it every time a slice ships — a stale baseline here is exactly the failure mode Section 6.1 exists to prevent. Last corrected: 2026-08-19 — added full-screen tracing and a second quantity type (linear footage) to `public/takeoff.html`; test count 56 → 66.
 
 ===============================================================================
 1. IDENTITY AND JOB
@@ -260,6 +260,8 @@ Unless explicitly updated by the repository state, assume this is the baseline t
 - Undo point during boundary tracing (`public/takeoff.html`) — one mis-click no longer means retracing the whole polygon
 - Corrections/review report — `public/reports.html` + `GET /api/reports/corrections` (`lib/report.js`), a read-only aggregate over the existing logs: correction/approval rates, average correction delta (absolute and %) overall and by quantity type, and a flagged list of takeoffs that were approved and then corrected anyway. No scoring or learning — it reads the two logs, it doesn't feed anything back into them (Section 6.4)
 - Visual identity — `public/theme.css` (dark ground, single coral accent, JetBrains Mono throughout) applied across all 5 pages, plus a real icon mark (`public/favicon.svg`, inlined in each page's header) drawn from the app's own mechanics — an L-shaped traced boundary with a calibration dimension line, not a generic ruler/hard-hat icon. Every element ID and class the existing JS depends on (`getElementById`, `.confidence-*`, `.status.*`, etc.) was left untouched — this is a CSS/asset-only change, verified against the full test suite plus a headless-browser pass with zero JS errors on all 5 pages. Canvas drawing colors inside `takeoff.html` (blue calibration line, green traced polygon) are untouched — those are functional, drawn by JS, not themed chrome
+- Full-screen tracing (`public/takeoff.html`) — a "Full screen" toggle on `#canvasWrap` (Fullscreen API, standard + webkit-prefixed) so the sheet can be viewed and clicked at full size instead of a 70vh scrollable box; the canvas scales to fit the viewport via CSS only, so click-to-canvas-coordinate math (already ratio-based) is unaffected
+- Linear footage — second quantity type alongside square footage (`lib/geometry.js`: `polylineLengthPixels`/`computeLinearFootage`; `server.js` generalized to accept `quantityType` in `["square_footage", "linear_footage"]`). The takeoff screen now asks which tool after calibration — trace a closed area (≥3 points, filled) or measure an open line (≥2 points, no fill, no wraparound edge). Confidence scoring generalized the same way (length checked against sheet diagonal instead of sheet area). Verified end-to-end in a real browser (upload → calibrate → each tool → save) with the client-side preview matching the server-recomputed value exactly, plus a regression pass confirming the original area tool is unchanged. 10 new tests (geometry math + API validation), 66/66 passing
 
 ## Partially built
 - Database-backed audit trail — audit trail exists (JSON store with timestamps), but it's a flat file, not a real database; fine for V1, will not scale past it
@@ -268,7 +270,7 @@ Unless explicitly updated by the repository state, assume this is the baseline t
 - OCR pipeline
 - Automatic scale detection (current scale entry is manual calibration only)
 - Sheet classification
-- Quantity types beyond square footage (drywall, duct, conduit, etc.)
+- Quantity types beyond square footage and linear footage — no count tool (fixtures, doors, outlets) yet, and trade-specific derived quantities (drywall sheets, duct runs, conduit) still require manual conversion from the raw area/length value
 - DWG/DXF preview or takeoff (upload is accepted; takeoff.html explicitly declines to run a takeoff on these)
 - Revision comparison
 - Autonomous estimating
