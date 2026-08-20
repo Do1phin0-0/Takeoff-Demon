@@ -4,7 +4,7 @@ Status: active operating layer
 Audience: Claude running inside the AMS Brain / Takeoff-Demon repository
 Incorporates: Core Operating Prompt v1.0 (reconciled — this document is its superset) and Takeoff Execution Layer v1.0 (folded into Sections 10 and 16). This file is the single operating layer; do not create parallel prompt documents.
 
-Maintenance note: Section 8 ("Repo Reality") is a snapshot, not a doctrine. Update it every time a slice ships — a stale baseline here is exactly the failure mode Section 6.1 exists to prevent. Last corrected: 2026-08-20 — added a live HUD overlay and animated trace segments to `public/takeoff.html`, extracted the segment-distance accumulation into a tested pure module (`public/lib/trace.js`), then added `getCardinalDirection`/`calculateCornerAngle` to the same module and wired HEADING/CORNER readouts into the HUD; test count now 68 (12 new unit tests across the two additions; the HUD itself remains presentation-only over the existing manual flow, no new detection logic — verified with the full suite plus headless-browser passes through calibrate → trace → close at each step, numbers cross-checked by hand).
+Maintenance note: Section 8 ("Repo Reality") is a snapshot, not a doctrine. Update it every time a slice ships — a stale baseline here is exactly the failure mode Section 6.1 exists to prevent. Last corrected: 2026-08-20 — added a live HUD overlay and animated trace segments to `public/takeoff.html`, extracted the segment-distance accumulation into a tested pure module (`public/lib/trace.js`), added `getCardinalDirection`/`calculateCornerAngle` to the same module and wired HEADING/CORNER readouts into the HUD, then added a standalone drywall/framing material-quantity module (`lib/material-takeoff.js`, no cost fields, not yet wired to any UI); test count now 73 (17 new unit tests across the three additions — verified with the full suite plus headless-browser passes through calibrate → trace → close, numbers cross-checked by hand).
 
 ===============================================================================
 1. IDENTITY AND JOB
@@ -264,12 +264,13 @@ Unless explicitly updated by the repository state, assume this is the baseline t
 
 ## Partially built
 - Database-backed audit trail — audit trail exists (JSON store with timestamps), but it's a flat file, not a real database; fine for V1, will not scale past it
+- Drywall/framing material takeoff — `lib/material-takeoff.js` (`computeWallTakeoff`) computes a bill of materials (studs at 16" o.c., track, 4'x8' drywall sheets both sides, screws, mud, primer/paint gallons) from a linear wall length, with stated waste-factor/coverage assumptions and no door/window-opening netting. Tested (`test/material-takeoff.test.js`), zero cost fields anywhere in the output by design. NOT wired into the takeoff UI or persist flow — reusing it for real requires deciding what "the wall run" input actually is in this app (a traced room's closed perimeter isn't automatically a wall assembly length), which hasn't been decided yet
 
 ## Not built
 - OCR pipeline
 - Automatic scale detection (current scale entry is manual calibration only)
 - Sheet classification
-- Quantity types beyond square footage (drywall, duct, conduit, etc.)
+- Quantity types beyond square footage as a selectable takeoff flow (drywall, duct, conduit, etc.) — see the unwired material-takeoff module above
 - DWG/DXF preview or takeoff (upload is accepted; takeoff.html explicitly declines to run a takeoff on these)
 - Revision comparison
 - Autonomous estimating
