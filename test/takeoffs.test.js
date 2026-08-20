@@ -64,6 +64,63 @@ test("POST /api/takeoffs rejects a polygon with fewer than 3 points", async () =
   assert.equal(res.status, 400);
 });
 
+test("POST /api/takeoffs computes linear footage server-side for the length tool", async () => {
+  const fileName = await uploadOneFile();
+  const res = await saveTakeoff(fileName, {
+    quantityType: "linear_footage",
+    polygon: [
+      { x: 0, y: 0 },
+      { x: 300, y: 0 },
+      { x: 300, y: 400 },
+    ],
+  });
+  assert.equal(res.status, 201);
+  // 100px = 10ft -> 0.1 ft/px; 700px path (300 + 400) -> 70ft
+  assert.equal(res.body.value, 70);
+  assert.equal(res.body.unit, "ft");
+  assert.equal(res.body.confidence, "medium");
+});
+
+test("POST /api/takeoffs accepts a 2-point line for linear_footage (below the 3-point area minimum)", async () => {
+  const fileName = await uploadOneFile();
+  const res = await saveTakeoff(fileName, {
+    quantityType: "linear_footage",
+    polygon: [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+    ],
+  });
+  assert.equal(res.status, 201);
+  assert.equal(res.body.value, 10);
+});
+
+test("POST /api/takeoffs rejects a linear_footage line with fewer than 2 points", async () => {
+  const fileName = await uploadOneFile();
+  const res = await saveTakeoff(fileName, {
+    quantityType: "linear_footage",
+    polygon: [{ x: 0, y: 0 }],
+  });
+  assert.equal(res.status, 400);
+});
+
+test("POST /api/takeoffs rejects a linear_footage line where every point coincides (zero length)", async () => {
+  const fileName = await uploadOneFile();
+  const res = await saveTakeoff(fileName, {
+    quantityType: "linear_footage",
+    polygon: [
+      { x: 5, y: 5 },
+      { x: 5, y: 5 },
+    ],
+  });
+  assert.equal(res.status, 400);
+});
+
+test("POST /api/takeoffs rejects an unsupported quantityType", async () => {
+  const fileName = await uploadOneFile();
+  const res = await saveTakeoff(fileName, { quantityType: "volume" });
+  assert.equal(res.status, 400);
+});
+
 test("POST /api/takeoffs rejects a self-intersecting (bowtie) polygon", async () => {
   const fileName = await uploadOneFile();
   const res = await saveTakeoff(fileName, {
