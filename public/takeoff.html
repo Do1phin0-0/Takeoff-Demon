@@ -73,6 +73,7 @@
 
     <script type="module">
       import * as pdfjsLib from "/vendor/pdfjs/pdf.min.mjs";
+      import { processPath } from "/lib/trace.js";
 
       const params = new URLSearchParams(location.search);
       const fileName = params.get("file");
@@ -348,9 +349,9 @@
           statusEl.textContent = tracePoints.length < 3 ? "TRACING — NEED 3+ POINTS" : "TRACING";
           const fpp = feetPerPixel();
           if (fpp && tracePoints.length > 0) {
-            let perimeterPx = 0;
-            for (let i = 1; i < tracePoints.length; i++) perimeterPx += dist(tracePoints[i - 1], tracePoints[i]);
-            lengthEl.textContent = `${(perimeterPx * fpp).toFixed(1)} ft`;
+            const segments = processPath(tracePoints, fpp);
+            const totalFeet = segments.length ? segments[segments.length - 1].totalFeet : 0;
+            lengthEl.textContent = `${totalFeet.toFixed(1)} ft`;
             areaEl.textContent = tracePoints.length >= 3 ? `${(polygonAreaPixels(tracePoints) * fpp * fpp).toFixed(1)} sq ft` : "—";
           } else {
             lengthEl.textContent = "—";
