@@ -55,3 +55,50 @@ test("processPath: matches a manual distance sum on an irregular path", async ()
   const lastTotal = segments[segments.length - 1].totalFeet;
   assert.ok(Math.abs(lastTotal - expectedTotal) < 0.01);
 });
+
+test("getCardinalDirection: the four primary compass points", async () => {
+  const { getCardinalDirection } = await tracePromise;
+  assert.equal(getCardinalDirection({ x: 0, y: 0 }, { x: 10, y: 0 }), "EAST");
+  assert.equal(getCardinalDirection({ x: 0, y: 0 }, { x: -10, y: 0 }), "WEST");
+  // canvas y grows downward: moving to smaller y is "up the sheet" = NORTH
+  assert.equal(getCardinalDirection({ x: 0, y: 0 }, { x: 0, y: -10 }), "NORTH");
+  assert.equal(getCardinalDirection({ x: 0, y: 0 }, { x: 0, y: 10 }), "SOUTH");
+});
+
+test("getCardinalDirection: diagonals", async () => {
+  const { getCardinalDirection } = await tracePromise;
+  assert.equal(getCardinalDirection({ x: 0, y: 0 }, { x: 10, y: -10 }), "NORTH-EAST");
+  assert.equal(getCardinalDirection({ x: 0, y: 0 }, { x: -10, y: -10 }), "NORTH-WEST");
+  assert.equal(getCardinalDirection({ x: 0, y: 0 }, { x: 10, y: 10 }), "SOUTH-EAST");
+  assert.equal(getCardinalDirection({ x: 0, y: 0 }, { x: -10, y: 10 }), "SOUTH-WEST");
+});
+
+test("getCardinalDirection: no movement is STATIONARY", async () => {
+  const { getCardinalDirection } = await tracePromise;
+  assert.equal(getCardinalDirection({ x: 5, y: 5 }, { x: 5, y: 5 }), "STATIONARY");
+});
+
+test("calculateCornerAngle: square corner reads 90.0", async () => {
+  const { calculateCornerAngle } = await tracePromise;
+  // Right turn: East then South, same shape as the app's own L-shaped-room fixture
+  const angle = calculateCornerAngle({ x: 50, y: 50 }, { x: 550, y: 50 }, { x: 550, y: 200 });
+  assert.equal(angle, 90.0);
+});
+
+test("calculateCornerAngle: straight line reads 180.0", async () => {
+  const { calculateCornerAngle } = await tracePromise;
+  const angle = calculateCornerAngle({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 0 });
+  assert.equal(angle, 180.0);
+});
+
+test("calculateCornerAngle: doubling back reads 0.0", async () => {
+  const { calculateCornerAngle } = await tracePromise;
+  const angle = calculateCornerAngle({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 0, y: 0 });
+  assert.equal(angle, 0.0);
+});
+
+test("calculateCornerAngle: a coincident vertex is defined as 0, not NaN", async () => {
+  const { calculateCornerAngle } = await tracePromise;
+  const angle = calculateCornerAngle({ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 10, y: 10 });
+  assert.equal(angle, 0);
+});

@@ -33,3 +33,35 @@ export function processPath(points, feetPerPixel) {
 function round2(n) {
   return Math.round(n * 100) / 100;
 }
+
+const COMPASS = ["EAST", "NORTH-EAST", "NORTH", "NORTH-WEST", "WEST", "SOUTH-WEST", "SOUTH", "SOUTH-EAST"];
+
+// Canvas/SVG y grows downward, so dy is inverted before the angle is taken —
+// otherwise "up the sheet" would read as south instead of north.
+export function getCardinalDirection(p1, p2) {
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  if (Math.abs(dx) < 1e-3 && Math.abs(dy) < 1e-3) return "STATIONARY";
+  let angleDeg = (Math.atan2(-dy, dx) * 180) / Math.PI;
+  if (angleDeg < 0) angleDeg += 360;
+  return COMPASS[Math.round(angleDeg / 45) % 8];
+}
+
+// Interior angle in degrees at vertex p2, between segments p1-p2 and p2-p3.
+// Purely descriptive — a non-90 result isn't flagged as wrong, since not
+// every traced boundary is rectilinear.
+export function calculateCornerAngle(p1, p2, p3) {
+  const bax = p1.x - p2.x;
+  const bay = p1.y - p2.y;
+  const bcx = p3.x - p2.x;
+  const bcy = p3.y - p2.y;
+  const magBA = Math.hypot(bax, bay);
+  const magBC = Math.hypot(bcx, bcy);
+  if (magBA === 0 || magBC === 0) return 0;
+  const cosTheta = Math.max(-1, Math.min(1, (bax * bcx + bay * bcy) / (magBA * magBC)));
+  return round1((Math.acos(cosTheta) * 180) / Math.PI);
+}
+
+function round1(n) {
+  return Math.round(n * 10) / 10;
+}

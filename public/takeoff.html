@@ -41,6 +41,8 @@
         <div><span class="label">STATUS:</span> <span id="hudStatus">READY</span></div>
         <div><span class="label">LENGTH:</span> <span id="hudLength">—</span></div>
         <div><span class="label">AREA:</span> <span id="hudArea">—</span></div>
+        <div><span class="label">HEADING:</span> <span id="hudHeading">—</span></div>
+        <div><span class="label">CORNER:</span> <span id="hudCorner">—</span></div>
       </div>
     </div>
 
@@ -73,7 +75,7 @@
 
     <script type="module">
       import * as pdfjsLib from "/vendor/pdfjs/pdf.min.mjs";
-      import { processPath } from "/lib/trace.js";
+      import { processPath, getCardinalDirection, calculateCornerAngle } from "/lib/trace.js";
 
       const params = new URLSearchParams(location.search);
       const fileName = params.get("file");
@@ -337,6 +339,10 @@
         const statusEl = document.getElementById("hudStatus");
         const lengthEl = document.getElementById("hudLength");
         const areaEl = document.getElementById("hudArea");
+        const headingEl = document.getElementById("hudHeading");
+        const cornerEl = document.getElementById("hudCorner");
+        headingEl.textContent = "—";
+        cornerEl.textContent = "—";
 
         if (mode === "calibrating") {
           if (calibrationPoints.length === 0) statusEl.textContent = "AWAITING SCALE REFERENCE";
@@ -356,6 +362,17 @@
           } else {
             lengthEl.textContent = "—";
             areaEl.textContent = "—";
+          }
+          if (tracePoints.length >= 2) {
+            headingEl.textContent = getCardinalDirection(tracePoints[tracePoints.length - 2], tracePoints[tracePoints.length - 1]);
+          }
+          if (tracePoints.length >= 3) {
+            const angle = calculateCornerAngle(
+              tracePoints[tracePoints.length - 3],
+              tracePoints[tracePoints.length - 2],
+              tracePoints[tracePoints.length - 1]
+            );
+            cornerEl.textContent = `${angle}°`;
           }
         } else if (closedPolygon) {
           statusEl.textContent = "TRACE COMPLETE";
