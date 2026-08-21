@@ -4,8 +4,9 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
-const { PDFDocument } = require("pdf-lib");
+const { PDFDocument, degrees } = require("pdf-lib");
 const Anthropic = require("@anthropic-ai/sdk");
+const sharp = require("sharp");
 
 const uploadDir = fs.mkdtempSync(path.join(os.tmpdir(), "takeoff-pdf-guard-test-"));
 process.env.UPLOAD_DIR = uploadDir;
@@ -34,6 +35,31 @@ async function makePdf(pageCount) {
   return Buffer.from(await doc.save());
 }
 
+// ANSI E (34"x44" at 72pt/in) — the actual full sheet size of the BBD Grand
+// Prairie set this app was verified against (see CLAUDE.md Section 8), versus
+// the toy 200x200pt pages every other fixture in this file uses. Bluebeam
+// exports are also typically flattened raster per sheet rather than live
+// vector/text, so each page gets a real embedded image (via `sharp`, already
+// a project dependency) instead of an empty content stream.
+const ANSI_E_WIDTH = 2448;
+const ANSI_E_HEIGHT = 3168;
+
+async function makeArchitecturalPdf(pageCount, { rotate = 0 } = {}) {
+  const doc = await PDFDocument.create();
+  const thumbnail = await sharp({
+    create: { width: 100, height: 100, channels: 3, background: { r: 220, g: 220, b: 220 } },
+  })
+    .png()
+    .toBuffer();
+  const image = await doc.embedPng(thumbnail);
+  for (let i = 0; i < pageCount; i++) {
+    const page = doc.addPage([ANSI_E_WIDTH, ANSI_E_HEIGHT]);
+    if (rotate) page.setRotation(degrees(rotate));
+    page.drawImage(image, { x: 0, y: 0, width: ANSI_E_WIDTH, height: ANSI_E_HEIGHT });
+  }
+  return Buffer.from(await doc.save());
+}
+
 test("a normal PDF is sent to Claude for analysis", async () => {
   callCount = 0;
   const pdf = await makePdf(2);
@@ -44,6 +70,47 @@ test("a normal PDF is sent to Claude for analysis", async () => {
   assert.equal(res.status, 200);
   assert.equal(res.body.analysis.status, "ok");
   assert.equal(callCount, 1);
+});
+
+test("a full-size (ANSI E) multi-page architectural set with real raster content is sent to Claude for analysis", async () => {
+  callCount = 0;
+  // 23 pages to match the actual sheet count of the BBD Grand Prairie set
+  // this app was manually verified against.
+  const pdf = await makeArchitecturalPdf(23);
+  const res = await request(app)
+    .post("/upload")
+    .attach("files", pdf, { filename: "bid-set.pdf", contentType: "application/pdf" });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.analysis.status, "ok");
+  assert.equal(callCount, 1);
+});
+
+test("a rotated landscape architectural sheet doesn't break the page-count guard", async () => {
+  callCount = 0;
+  // Bluebeam-exported floor-plan sheets are commonly landscape via a
+  // /Rotate entry rather than swapped page dimensions.
+  const pdf = await makeArchitecturalPdf(3, { rotate: 90 });
+  const res = await request(app)
+    .post("/upload")
+    .attach("files", pdf, { filename: "floor-plan.pdf", contentType: "application/pdf" });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.analysis.status, "ok");
+  assert.equal(callCount, 1);
+});
+
+test("a full-size architectural set over the 100-page limit is still skipped before calling Claude", async () => {
+  callCount = 0;
+  const pdf = await makeArchitecturalPdf(105);
+  const res = await request(app)
+    .post("/upload")
+    .attach("files", pdf, { filename: "huge-real-bid-set.pdf", contentType: "application/pdf" });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.analysis.status, "skipped");
+  assert.match(res.body.analysis.skippedFiles[0].reason, /105 pages/);
+  assert.equal(callCount, 0, "the page-count guard must trip on real sheet size/content too, not just toy pages");
 });
 
 test("a PDF over the 100-page limit is skipped before ever calling Claude", async () => {
