@@ -4,7 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Takeoff-Demon — Corrections Report</title>
+    <meta name="theme-color" content="#16171c" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" />
     <link rel="stylesheet" href="/theme.css" />
     <style>
@@ -54,7 +57,7 @@
           stats.appendChild(stat(r.deltas.avgPercentDelta != null ? `${r.deltas.avgPercentDelta}%` : "—", "Avg correction delta %"));
           body.appendChild(stats);
 
-          body.appendChild(el("h2", null, "By quantity type"));
+          body.appendChild(el("h2", null, "By Quantity Type"));
           const types = Object.entries(r.byQuantityType);
           if (types.length === 0) {
             body.appendChild(el("p", "empty", "No corrections logged yet."));
@@ -72,7 +75,7 @@
             body.appendChild(table);
           }
 
-          body.appendChild(el("h2", null, "Approved, then corrected anyway"));
+          body.appendChild(el("h2", null, "Approved, Then Corrected Anyway"));
           if (r.approvedThenCorrected.length === 0) {
             body.appendChild(el("p", "empty", "None — no approved value has been overridden after the fact."));
           } else {
@@ -90,7 +93,7 @@
             body.appendChild(table);
           }
 
-          body.appendChild(el("h2", null, "Recent corrections"));
+          body.appendChild(el("h2", null, "Recent Corrections"));
           if (r.recentCorrections.length === 0) {
             body.appendChild(el("p", "empty", "No corrections logged yet."));
           } else {

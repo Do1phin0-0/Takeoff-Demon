@@ -4,7 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Takeoff-Demon — Takeoff</title>
+    <meta name="theme-color" content="#16171c" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" />
     <link rel="stylesheet" href="/theme.css" />
     <style>
@@ -23,7 +26,7 @@
     <div class="controls" id="pageControls" style="display:none">
       <button class="secondary" id="prevPage">◀ Prev</button>
       <span id="pageLabel"></span>
-      <input type="number" id="pageInput" min="1" style="width:5rem" />
+      <input type="number" id="pageInput" name="pageNumber" aria-label="Go to page number" autocomplete="off" min="1" style="width:5rem" />
       <button class="secondary" id="goPage">Go to page</button>
       <button class="secondary" id="nextPage">Next ▶</button>
       <span class="hint" style="margin:0">Changing pages resets calibration — scale is per sheet.</span>
@@ -45,8 +48,8 @@
 
     <div class="controls" id="calibrateControls" style="display:none">
       <span>Click two points on a known dimension, then enter its real length:</span>
-      <input type="number" id="realDistance" placeholder="length" min="0" step="0.01" style="width:6rem" />
-      <select id="realUnit"><option value="ft">ft</option><option value="in">in</option></select>
+      <input type="number" id="realDistance" name="realDistance" aria-label="Real-world length of the calibration line" autocomplete="off" placeholder="length" min="0" step="0.01" style="width:6rem" />
+      <select id="realUnit" name="realUnit" aria-label="Unit of the calibration length"><option value="ft">ft</option><option value="in">in</option></select>
       <button id="confirmCalibration" disabled>Confirm calibration</button>
       <button class="secondary" id="resetCalibration">Reset</button>
     </div>
@@ -66,7 +69,7 @@
 
     <div class="controls" id="saveControls" style="display:none">
       <span id="quantitySummary"></span>
-      <input type="text" id="note" placeholder="optional note" style="flex:1;min-width:12rem" />
+      <input type="text" id="note" name="note" aria-label="Optional note about this takeoff" autocomplete="off" placeholder="optional note" style="flex:1;min-width:12rem" />
       <button id="saveTakeoff">Save takeoff</button>
     </div>
 
@@ -405,10 +408,10 @@
         const feetPerPixel = (calibration.realDistance * feetPerUnit) / calibration.pixelDistance;
         if (activeQuantityType === "square_footage") {
           const areaSqFt = polygonAreaPixels(closedPolygon) * feetPerPixel * feetPerPixel;
-          document.getElementById("quantitySummary").textContent = `≈ ${areaSqFt.toFixed(1)} sq ft (server will recompute and score confidence)`;
+          document.getElementById("quantitySummary").textContent = `≈ ${areaSqFt.toFixed(1)} sq ft (server will recompute and score confidence)`;
         } else {
           const lengthFt = polylineLengthPixels(closedPolygon) * feetPerPixel;
-          document.getElementById("quantitySummary").textContent = `≈ ${lengthFt.toFixed(1)} ft (server will recompute and score confidence)`;
+          document.getElementById("quantitySummary").textContent = `≈ ${lengthFt.toFixed(1)} ft (server will recompute and score confidence)`;
         }
       }
 
@@ -464,8 +467,8 @@
         wrap.className = "controls";
         wrap.innerHTML = `
           <span>Correction:</span>
-          <input type="number" id="correctedValue" placeholder="correct value" step="0.01" style="width:8rem" />
-          <input type="text" id="correctionNote" placeholder="why" style="flex:1;min-width:10rem" />
+          <input type="number" id="correctedValue" name="correctedValue" aria-label="Corrected value" autocomplete="off" placeholder="correct value" step="0.01" style="width:8rem" />
+          <input type="text" id="correctionNote" name="correctionNote" aria-label="Reason for the correction" autocomplete="off" placeholder="why" style="flex:1;min-width:10rem" />
           <button id="submitCorrection">Submit correction</button>
         `;
         resultEl.after(wrap);

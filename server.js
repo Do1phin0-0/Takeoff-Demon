@@ -536,6 +536,10 @@ app.post("/api/takeoffs", (req, res) => {
     confidence: confidence.level,
     confidenceReasons: confidence.reasons,
     markupFileName,
+    // markup proof is a snapshot of the canvas, so these are its intrinsic dimensions —
+    // the review page needs them to reserve space and avoid reflow as each proof loads
+    canvasWidth: Number(canvasWidth) || 0,
+    canvasHeight: Number(canvasHeight) || 0,
     note: note || null,
   });
 

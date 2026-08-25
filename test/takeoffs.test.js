@@ -58,6 +58,19 @@ test("POST /api/takeoffs computes area server-side and rejects a client-supplied
   assert.equal(res.body.confidence, "medium");
 });
 
+test("POST /api/takeoffs persists the markup's canvas dimensions so the review page can reserve space", async () => {
+  const fileName = await uploadOneFile();
+  const res = await saveTakeoff(fileName);
+  assert.equal(res.status, 201);
+  assert.equal(res.body.canvasWidth, 1000);
+  assert.equal(res.body.canvasHeight, 1000);
+
+  const listed = await request(app).get("/api/takeoffs");
+  const saved = listed.body.takeoffs.find((t) => t.id === res.body.id);
+  assert.equal(saved.canvasWidth, 1000);
+  assert.equal(saved.canvasHeight, 1000);
+});
+
 test("POST /api/takeoffs rejects a polygon with fewer than 3 points", async () => {
   const fileName = await uploadOneFile();
   const res = await saveTakeoff(fileName, { polygon: [{ x: 0, y: 0 }, { x: 1, y: 1 }] });

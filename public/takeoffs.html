@@ -4,7 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Takeoff-Demon — Review Takeoffs</title>
+    <meta name="theme-color" content="#16171c" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" />
     <link rel="stylesheet" href="/theme.css" />
     <style>
@@ -75,7 +78,7 @@
 
         card.appendChild(el("div", "meta",
           `${t.fileName} · page ${t.pageNumber || 1} · ${new Date(t.createdAt).toLocaleString()}` +
-          ` · scale: ${t.scale.realDistance} ${t.scale.unit} = ${Math.round(t.scale.pixelDistance)}px`));
+          ` · scale: ${t.scale.realDistance} ${t.scale.unit} = ${Math.round(t.scale.pixelDistance)}px`));
 
         const conf = el("div");
         conf.appendChild(el("span", `confidence-${t.confidence}`, `Confidence: ${t.confidence}`));
@@ -87,8 +90,13 @@
         const markup = el("div", "markup");
         const img = document.createElement("img");
         img.loading = "lazy";
+        // explicit intrinsic size from the saved canvas dims so the card doesn't reflow on load
+        if (t.canvasWidth && t.canvasHeight) {
+          img.width = t.canvasWidth;
+          img.height = t.canvasHeight;
+        }
         img.src = `/uploads/markups/${encodeURIComponent(t.markupFileName)}`;
-        img.alt = "Markup proof";
+        img.alt = `Markup proof for ${t.value} ${t.unit} on ${t.fileName}, page ${t.pageNumber || 1}`;
         markup.appendChild(img);
         card.appendChild(markup);
 
@@ -116,6 +124,9 @@
         if (!approved) {
           const whoInput = document.createElement("input");
           whoInput.placeholder = "initials";
+          whoInput.name = "who";
+          whoInput.autocomplete = "off";
+          whoInput.setAttribute("aria-label", "Your initials, to record who approved this takeoff");
           whoInput.style.width = "5rem";
           const approveBtn = el("button", null, "Approve");
           approveBtn.addEventListener("click", async () => {
@@ -136,9 +147,15 @@
         corrValue.type = "number";
         corrValue.step = "0.01";
         corrValue.placeholder = "correct value";
+        corrValue.name = "correctedValue";
+        corrValue.autocomplete = "off";
+        corrValue.setAttribute("aria-label", `Corrected value, replacing ${t.value} ${t.unit}`);
         corrValue.style.width = "8rem";
         const corrNote = document.createElement("input");
         corrNote.placeholder = "why";
+        corrNote.name = "correctionNote";
+        corrNote.autocomplete = "off";
+        corrNote.setAttribute("aria-label", "Reason for the correction");
         corrNote.style.flex = "1";
         corrNote.style.minWidth = "10rem";
         const corrBtn = el("button", "secondary", "Log correction");

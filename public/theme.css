@@ -84,7 +84,13 @@ input, select, textarea {
   font-family: var(--font-mono);
   font-size: 0.85rem;
 }
-input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+/* visible focus ring: the 1px border shift alone is too thin to be the only focus signal */
+input:focus-visible, select:focus-visible, textarea:focus-visible,
+button:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
 input[type="file"] { padding: 0.5rem; border: 1px dashed var(--border-soft); border-radius: 6px; }
 
 .err { color: var(--red); }
