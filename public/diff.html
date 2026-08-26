@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Takeoff-Demon — Compare Revisions</title>
+    <meta name="theme-color" content="#16171c" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="/theme.css" />
+    <style>
+      body { max-width: 1100px; }
+      .pair { display: flex; gap: 1rem; flex-wrap: wrap; }
+      .pair > div { flex: 1; min-width: 280px; }
+      .pickRow { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; }
+      .pickRow select { flex: 1; min-width: 10rem; }
+      .sourceWrap { position: relative; border: 1px solid var(--border); border-radius: 8px; overflow: auto; max-height: 45vh; background: #1c1d23; }
+      .sourceWrap canvas { display: block; cursor: crosshair; max-width: 100%; }
+      .sliderWrap { position: relative; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #1c1d23; max-width: 100%; }
+      .sliderWrap img { display: block; max-width: 100%; height: auto; }
+      .sliderWrap .top { position: absolute; top: 0; left: 0; }
+      #compareSlider { width: 100%; margin-top: 0.6rem; }
+      .warn-box { color: var(--amber); font-size: 0.82rem; margin: 0.4rem 0; }
+      #aiSummary { white-space: pre-wrap; font-size: 0.85rem; padding: 0.9rem 1rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-panel); color: var(--text-dim); margin-top: 0.75rem; }
+    </style>
+  </head>
+  <body>
+    <div class="brand">
+      <svg width="16" height="16" viewBox="0 0 32 32" fill="none"><path d="M7 26 L7 13 L16 13 L16 6 L25 6 L25 26 Z" stroke="#e2664f" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/><circle cx="7" cy="26" r="2.2" fill="#e2664f"/></svg>
+      Takeoff-Demon
+    </div>
+    <h1>Compare Revisions</h1>
+    <p class="nav"><a href="/index.html">← Upload</a> · <a href="/takeoffs.html">Review takeoffs →</a></p>
+    <p class="hint">
+      Pick the same sheet from two uploads. Pin two matching landmarks on each (same corner,
+      same grid intersection) so the two can be aligned and slid against each other — this app
+      does not attempt automatic image registration, so alignment is only as good as your pins.
+      Any AI change summary is advisory only: verify every item against the actual sheets before
+      it goes into a change order.
+    </p>
+
+    <div class="steps">
+      <span class="step" id="step1">1. Pick sheets</span>
+      <span class="step" id="step2">2. Pin 2 matching points</span>
+      <span class="step" id="step3">3. Align &amp; review</span>
+    </div>
+
+    <div class="pair">
+      <div>
+        <h3>Before</h3>
+        <div class="pickRow">
+          <select id="beforeFile" aria-label="Before file"></select>
+          <input type="number" id="beforePage" name="beforePage" aria-label="Before page number" autocomplete="off" min="1" value="1" style="width:4.5rem" />
+          <button class="secondary" id="loadBefore">Load</button>
+        </div>
+        <div class="sourceWrap"><canvas id="beforeCanvas"></canvas></div>
+      </div>
+      <div>
+        <h3>After</h3>
+        <div class="pickRow">
+          <select id="afterFile" aria-label="After file"></select>
+          <input type="number" id="afterPage" name="afterPage" aria-label="After page number" autocomplete="off" min="1" value="1" style="width:4.5rem" />
+          <button class="secondary" id="loadAfter">Load</button>
+        </div>
+        <div class="sourceWrap"><canvas id="afterCanvas"></canvas></div>
+      </div>
+    </div>
+
+    <div class="controls" id="pinControls" style="display:none">
+      <span id="pinHint">Click a landmark on BEFORE, then click the same landmark on AFTER.</span>
+      <button class="secondary" id="resetPins">Reset pins</button>
+    </div>
+
+    <div class="controls" id="alignControls" style="display:none">
+      <input type="text" id="note" name="note" aria-label="Optional note about this comparison" autocomplete="off" placeholder="optional note (e.g. Rev 1 to Rev 2)" style="flex:1;min-width:12rem" />
+      <button id="alignBtn">Align &amp; compare</button>
+    </div>
+
+    <div id="result"></div>
+
+    <div id="sliderSection" style="display:none">
+      <h2>Slide to compare</h2>
+      <div class="sliderWrap" id="sliderWrap">
+        <img id="afterImg" alt="After revision" />
+        <img id="beforeImg" class="top" alt="Before revision, aligned to the after sheet" />
+      </div>
+      <input type="range" id="compareSlider" min="0" max="100" value="50" aria-label="Reveal more of the before or after image" />
+      <div id="aiSummary"></div>
+    </div>
+
+    <script type="module">
+      import * as pdfjsLib from "/vendor/pdfjs/pdf.min.mjs";
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "/vendor/pdfjs/pdf.worker.min.mjs";
+
+      const resultEl = document.getElementById("result");
+      const setResult = (text, cls) => { resultEl.textContent = text; resultEl.className = cls || ""; };
+      const fail = (msg) => setResult(msg, "err");
+
+      const sides = {
+        before: { canvas: document.getElementById("beforeCanvas"), select: document.getElementById("beforeFile"), pageInput: document.getElementById("beforePage"), loaded: false },
+        after: { canvas: document.getElementById("afterCanvas"), select: document.getElementById("afterFile"), pageInput: document.getElementById("afterPage"), loaded: false },
+      };
+      for (const s of Object.values(sides)) s.ctx = s.canvas.getContext("2d");
+
+      async function populateFileLists() {
+        const res = await fetch("/files");
+        const { batches } = await res.json();
+        const options = [];
+        for (const b of batches) {
+          for (const f of b.files) {
+            options.push({ label: `${f.originalName} (${new Date(b.createdAt).toLocaleDateString()})`, storedName: f.storedName });
+          }
+        }
+        for (const side of Object.values(sides)) {
+          side.select.innerHTML = options.map((o) => `<option value="${o.storedName}">${o.label}</option>`).join("");
+        }
+      }
+      populateFileLists().catch((e) => fail(`Could not load upload history: ${e.message}`));
+
+      async function loadSide(side) {
+        const storedName = side.select.value;
+        if (!storedName) return fail("Pick a file first.");
+        const page = Math.max(1, parseInt(side.pageInput.value, 10) || 1);
+        const ext = storedName.split(".").pop().toLowerCase();
+        const url = `/uploads/${encodeURIComponent(storedName)}`;
+        if (["dwg", "dxf"].includes(ext)) {
+          return fail("Preview isn't supported yet for DWG/DXF — pick a PDF or image.");
+        }
+        setResult("");
+        if (ext === "pdf") {
+          const pdfDoc = await pdfjsLib.getDocument({ url }).promise;
+          const pageNum = Math.min(page, pdfDoc.numPages);
+          const p = await pdfDoc.getPage(pageNum);
+          const baseViewport = p.getViewport({ scale: 1 });
+          const scale = Math.min(2.5, Math.max(1, 3600 / baseViewport.width));
+          const viewport = p.getViewport({ scale });
+          side.canvas.width = viewport.width;
+          side.canvas.height = viewport.height;
+          await p.render({ canvasContext: side.ctx, viewport }).promise;
+        } else {
+          await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+              side.canvas.width = img.naturalWidth;
+              side.canvas.height = img.naturalHeight;
+              side.ctx.drawImage(img, 0, 0);
+              resolve();
+            };
+            img.onerror = () => reject(new Error("Could not load image."));
+            img.src = url;
+          });
+        }
+        side.storedName = storedName;
+        side.pageNumber = page;
+        side.loaded = true;
+        maybeShowPinControls();
+      }
+
+      document.getElementById("loadBefore").addEventListener("click", () => loadSide(sides.before).catch((e) => fail(e.message)));
+      document.getElementById("loadAfter").addEventListener("click", () => loadSide(sides.after).catch((e) => fail(e.message)));
+
+      function maybeShowPinControls() {
+        if (sides.before.loaded && sides.after.loaded) {
+          document.getElementById("step1").classList.add("done");
+          document.getElementById("step2").classList.add("active");
+          document.getElementById("pinControls").style.display = "flex";
+        }
+      }
+
+      // Pins are collected as alternating before/after clicks so each pair stays
+      // correctly ordered without a separate per-side confirm step.
+      let nextSide = "before";
+      let pinsBefore = [];
+      let pinsAfter = [];
+
+      function canvasPoint(canvas, evt) {
+        const rect = canvas.getBoundingClientRect();
+        return { x: ((evt.clientX - rect.left) / rect.width) * canvas.width, y: ((evt.clientY - rect.top) / rect.height) * canvas.height };
+      }
+
+      function drawPinMarker(side, p) {
+        side.ctx.fillStyle = "#2563eb";
+        side.ctx.beginPath();
+        side.ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+        side.ctx.fill();
+      }
+
+      function updatePinHint() {
+        const hint = document.getElementById("pinHint");
+        const doneCount = Math.min(pinsBefore.length, pinsAfter.length);
+        if (doneCount >= 2) {
+          hint.textContent = "2 pins placed. Ready to align.";
+          document.getElementById("alignControls").style.display = "flex";
+          document.getElementById("step2").classList.remove("active");
+          document.getElementById("step2").classList.add("done");
+          document.getElementById("step3").classList.add("active");
+          return;
+        }
+        hint.textContent = nextSide === "before"
+          ? `Click landmark ${doneCount + 1} of 2 on BEFORE.`
+          : `Now click the SAME landmark on AFTER.`;
+      }
+
+      function attachClickHandler(sideName) {
+        sides[sideName].canvas.addEventListener("click", (evt) => {
+          if (Math.min(pinsBefore.length, pinsAfter.length) >= 2) return;
+          if (sideName !== nextSide) return;
+          const p = canvasPoint(sides[sideName].canvas, evt);
+          if (sideName === "before") {
+            pinsBefore.push(p);
+            drawPinMarker(sides.before, p);
+            nextSide = "after";
+          } else {
+            pinsAfter.push(p);
+            drawPinMarker(sides.after, p);
+            nextSide = "before";
+          }
+          updatePinHint();
+        });
+      }
+      attachClickHandler("before");
+      attachClickHandler("after");
+
+      document.getElementById("resetPins").addEventListener("click", () => {
+        pinsBefore = [];
+        pinsAfter = [];
+        nextSide = "before";
+        document.getElementById("alignControls").style.display = "none";
+        document.getElementById("step3").classList.remove("active");
+        document.getElementById("step2").classList.remove("done");
+        document.getElementById("step2").classList.add("active");
+        loadSide(sides.before).then(() => loadSide(sides.after)).catch((e) => fail(e.message));
+        updatePinHint();
+      });
+
+      document.getElementById("alignBtn").addEventListener("click", async () => {
+        if (pinsBefore.length !== 2 || pinsAfter.length !== 2) return fail("Place both pins first.");
+        setResult("Aligning…");
+        const payload = {
+          fileNameBefore: sides.before.storedName,
+          pageNumberBefore: sides.before.pageNumber,
+          imageBefore: sides.before.canvas.toDataURL("image/png"),
+          canvasWidthBefore: sides.before.canvas.width,
+          canvasHeightBefore: sides.before.canvas.height,
+          pointsBefore: pinsBefore,
+          fileNameAfter: sides.after.storedName,
+          pageNumberAfter: sides.after.pageNumber,
+          imageAfter: sides.after.canvas.toDataURL("image/png"),
+          canvasWidthAfter: sides.after.canvas.width,
+          canvasHeightAfter: sides.after.canvas.height,
+          pointsAfter: pinsAfter,
+          note: document.getElementById("note").value || null,
+        };
+        try {
+          const res = await fetch("/api/compare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+          const body = await res.json();
+          if (!res.ok) return fail(`Error: ${body.error || res.statusText}`);
+          renderResult(body);
+        } catch (e) {
+          fail(`Network error: ${e.message}`);
+        }
+      });
+
+      function renderResult(record) {
+        let text = `Comparison ${record.id} saved.`;
+        setResult(text, record.warnings.length ? "warn" : "ok");
+        const box = document.getElementById("aiSummary");
+        if (record.warnings.length) {
+          box.insertAdjacentHTML("beforebegin", `<div class="warn-box">${record.warnings.map((w) => `⚠ ${w}`).join("<br>")}</div>`);
+        }
+        document.getElementById("afterImg").src = `/uploads/compare/${record.afterFileName}`;
+        document.getElementById("beforeImg").src = `/uploads/compare/${record.alignedBeforeFileName}`;
+        document.getElementById("sliderSection").style.display = "block";
+        setSlider(50);
+        document.getElementById("compareSlider").addEventListener("input", (e) => setSlider(e.target.value));
+
+        if (record.aiSummary.status === "ok") {
+          box.textContent = `AI change summary (advisory only — verify against the actual sheets):\n\n${record.aiSummary.text}`;
+        } else if (record.aiSummary.status === "skipped") {
+          box.textContent = `AI change summary skipped: ${record.aiSummary.reason}`;
+        } else {
+          box.textContent = `AI change summary failed: ${record.aiSummary.reason}`;
+        }
+      }
+
+      function setSlider(pct) {
+        document.getElementById("beforeImg").style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
+      }
+    </script>
+  </body>
+</html>
