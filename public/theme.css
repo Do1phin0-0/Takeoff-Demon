@@ -260,6 +260,55 @@ form { display: flex; gap: 0.5rem; }
 textarea { flex: 1; resize: vertical; min-height: 2.5rem; }
 .done-card a { font-weight: 600; }
 
+/* index.html: hero header — letter-reveal title, shimmer sweep, soft glow */
+.hero { position: relative; padding-top: 0.5rem; }
+.hero-glow {
+  position: absolute;
+  top: -3.5rem;
+  left: 50%;
+  width: 26rem;
+  height: 26rem;
+  max-width: 140vw;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(226, 102, 79, 0.16), transparent 65%);
+  filter: blur(6px);
+  pointer-events: none;
+  z-index: -1;
+  animation: pulseBloom 4.5s ease-in-out infinite;
+}
+@keyframes pulseBloom {
+  0%, 100% { opacity: 0.55; transform: translateX(-50%) scale(1); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.1); }
+}
+.hero h1 {
+  background-image: linear-gradient(100deg, #f2f2f0 42%, var(--accent-strong) 50%, #f2f2f0 58%);
+  background-size: 220% 100%;
+  background-position: 200% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 3.2s ease-in-out 1.1s infinite;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  60%, 100% { background-position: -60% 0; }
+}
+.hero-letter {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(6px);
+  animation: letterIn 0.4s var(--ease) forwards;
+}
+@keyframes letterIn {
+  0% { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.hero-fade-in { opacity: 0; animation: fadeIn 0.5s var(--ease) forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .hero h1 { animation: none; background-position: 0 0; }
+  .hero-glow { animation: none; }
+}
+
 /* index.html: faint background field of takeoff figures, decorative only */
 .bg-scatter { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
 .bg-scatter span { position: absolute; color: var(--accent); font-family: var(--font-mono); white-space: nowrap; animation: fadeIn 1.2s var(--ease) both; }

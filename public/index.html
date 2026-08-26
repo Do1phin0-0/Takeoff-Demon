@@ -13,17 +13,20 @@
   </head>
   <body>
     <div class="bg-scatter" id="bgScatter" aria-hidden="true"></div>
-    <div class="brand">
-      <svg width="16" height="16" viewBox="0 0 32 32" fill="none"><path d="M7 26 L7 13 L16 13 L16 6 L25 6 L25 26 Z" stroke="#e2664f" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/><circle cx="7" cy="26" r="2.2" fill="#e2664f"/></svg>
-      Takeoff-Demon
+    <div class="hero">
+      <div class="hero-glow" aria-hidden="true"></div>
+      <div class="brand">
+        <svg width="16" height="16" viewBox="0 0 32 32" fill="none"><path d="M7 26 L7 13 L16 13 L16 6 L25 6 L25 26 Z" stroke="#e2664f" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/><circle cx="7" cy="26" r="2.2" fill="#e2664f"/></svg>
+        Takeoff-Demon
+      </div>
+      <h1 id="heroTitle" aria-label="Takeoff-Demon"><span id="heroTitleAnim" aria-hidden="true"></span></h1>
+      <p class="nav" id="heroNav"><a href="/takeoffs.html">Review takeoffs →</a> · <a href="/reports.html">Corrections report →</a> · <a href="/contract">Draft a subcontract →</a></p>
+      <p class="hint" id="heroHint">
+        Upload blueprints or photos. Accepts PDF, PNG, JPG, WebP, TIFF, DWG, DXF.
+        Max 100 MB per file, up to 20 files at once.
+        PDF, PNG, JPG, WebP, and DXF files get one combined AI takeoff summary across the whole batch.
+      </p>
     </div>
-    <h1>Takeoff-Demon</h1>
-    <p class="nav"><a href="/takeoffs.html">Review takeoffs →</a> · <a href="/reports.html">Corrections report →</a> · <a href="/contract">Draft a subcontract →</a></p>
-    <p class="hint">
-      Upload blueprints or photos. Accepts PDF, PNG, JPG, WebP, TIFF, DWG, DXF.
-      Max 100 MB per file, up to 20 files at once.
-      PDF, PNG, JPG, WebP, and DXF files get one combined AI takeoff summary across the whole batch.
-    </p>
     <form id="form">
       <label class="dropzone" id="dropzone" for="files">
         <svg class="dz-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -50,6 +53,32 @@
     <div id="history"></div>
 
     <script>
+      // Hero title: reveal "Takeoff-Demon" one letter at a time, then bring
+      // in the nav/hint once the title has finished. Real text stays in the
+      // h1's aria-label; the letter spans are aria-hidden.
+      (function renderHeroTitle() {
+        const titleText = "Takeoff-Demon";
+        const anim = document.getElementById("heroTitleAnim");
+        const letterDelay = 0.045;
+        const frag = document.createDocumentFragment();
+        titleText.split("").forEach((ch, i) => {
+          const span = document.createElement("span");
+          span.className = "hero-letter";
+          span.textContent = ch === " " ? " " : ch;
+          span.style.animationDelay = `${i * letterDelay}s`;
+          frag.appendChild(span);
+        });
+        anim.appendChild(frag);
+
+        const totalDelay = titleText.length * letterDelay + 0.3;
+        const nav = document.getElementById("heroNav");
+        const hint = document.getElementById("heroHint");
+        nav.style.animationDelay = `${totalDelay}s`;
+        hint.style.animationDelay = `${totalDelay + 0.15}s`;
+        nav.classList.add("hero-fade-in");
+        hint.classList.add("hero-fade-in");
+      })();
+
       const form = document.getElementById("form");
       const submit = document.getElementById("submit");
       const result = document.getElementById("result");
