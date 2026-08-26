@@ -13,26 +13,38 @@
   </head>
   <body>
     <div class="bg-scatter" id="bgScatter" aria-hidden="true"></div>
-    <div class="brand">
-      <svg width="16" height="16" viewBox="0 0 32 32" fill="none"><path d="M7 26 L7 13 L16 13 L16 6 L25 6 L25 26 Z" stroke="#e2664f" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/><circle cx="7" cy="26" r="2.2" fill="#e2664f"/></svg>
-      Takeoff-Demon
+    <div class="hero">
+      <div class="hero-glow" aria-hidden="true"></div>
+      <div class="brand">
+        <svg width="16" height="16" viewBox="0 0 32 32" fill="none"><path d="M7 26 L7 13 L16 13 L16 6 L25 6 L25 26 Z" stroke="#e2664f" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/><circle cx="7" cy="26" r="2.2" fill="#e2664f"/></svg>
+        Takeoff-Demon
+      </div>
+      <h1 id="heroTitle" aria-label="Takeoff-Demon"><span id="heroTitleAnim" aria-hidden="true"></span></h1>
+      <p class="nav" id="heroNav"><a href="/takeoffs.html">Review takeoffs →</a> · <a href="/reports.html">Corrections report →</a> · <a href="/contract">Draft a subcontract →</a></p>
+      <p class="hint" id="heroHint">
+        Upload blueprints or photos. Accepts PDF, PNG, JPG, WebP, TIFF, DWG, DXF.
+        Max 100 MB per file, up to 20 files at once.
+        PDF, PNG, JPG, WebP, and DXF files get one combined AI takeoff summary across the whole batch.
+      </p>
     </div>
-    <h1>Takeoff-Demon</h1>
-    <p class="nav"><a href="/takeoffs.html">Review takeoffs →</a> · <a href="/reports.html">Corrections report →</a> · <a href="/contract">Draft a subcontract →</a></p>
-    <p class="hint">
-      Upload blueprints or photos. Accepts PDF, PNG, JPG, WebP, TIFF, DWG, DXF.
-      Max 100 MB per file, up to 20 files at once.
-      PDF, PNG, JPG, WebP, and DXF files get one combined AI takeoff summary across the whole batch.
-    </p>
     <form id="form">
-      <input
-        id="files"
-        name="files"
-        type="file"
-        multiple
-        accept=".pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff,.dwg,.dxf,application/pdf,image/*"
-        required
-      />
+      <label class="dropzone" id="dropzone" for="files">
+        <svg class="dz-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 16V4M12 4l-4 4M12 4l4 4" />
+          <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+        </svg>
+        <span id="dzLabel">Drop files here, or click to browse</span>
+        <div class="dz-files" id="dzFiles"></div>
+        <input
+          id="files"
+          name="files"
+          type="file"
+          multiple
+          accept=".pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff,.dwg,.dxf,application/pdf,image/*"
+          required
+        />
+      </label>
+      <div class="progress-track" id="progressTrack" style="display:none"><div class="progress-fill" id="progressFill"></div></div>
       <button type="submit" id="submit">Upload</button>
     </form>
     <div id="result"></div>
@@ -41,10 +53,96 @@
     <div id="history"></div>
 
     <script>
+      // Hero title: reveal "Takeoff-Demon" one letter at a time, then bring
+      // in the nav/hint once the title has finished. Real text stays in the
+      // h1's aria-label; the letter spans are aria-hidden.
+      (function renderHeroTitle() {
+        const titleText = "Takeoff-Demon";
+        const anim = document.getElementById("heroTitleAnim");
+        const letterDelay = 0.045;
+        const frag = document.createDocumentFragment();
+        titleText.split("").forEach((ch, i) => {
+          const span = document.createElement("span");
+          span.className = "hero-letter";
+          span.textContent = ch === " " ? " " : ch;
+          span.style.animationDelay = `${i * letterDelay}s`;
+          frag.appendChild(span);
+        });
+        anim.appendChild(frag);
+
+        const totalDelay = titleText.length * letterDelay + 0.3;
+        const nav = document.getElementById("heroNav");
+        const hint = document.getElementById("heroHint");
+        nav.style.animationDelay = `${totalDelay}s`;
+        hint.style.animationDelay = `${totalDelay + 0.15}s`;
+        nav.classList.add("hero-fade-in");
+        hint.classList.add("hero-fade-in");
+      })();
+
       const form = document.getElementById("form");
       const submit = document.getElementById("submit");
       const result = document.getElementById("result");
       const history = document.getElementById("history");
+      const dropzone = document.getElementById("dropzone");
+      const dzLabel = document.getElementById("dzLabel");
+      const dzFiles = document.getElementById("dzFiles");
+      const filesInput = document.getElementById("files");
+      const progressTrack = document.getElementById("progressTrack");
+      const progressFill = document.getElementById("progressFill");
+
+      function describeSelection() {
+        if (!filesInput.files.length) {
+          dzLabel.textContent = "Drop files here, or click to browse";
+          dzFiles.textContent = "";
+          return;
+        }
+        dzLabel.textContent = `${filesInput.files.length} file${filesInput.files.length > 1 ? "s" : ""} selected`;
+        dzFiles.textContent = Array.from(filesInput.files).map((f) => f.name).join(", ");
+      }
+      filesInput.addEventListener("change", describeSelection);
+
+      ["dragenter", "dragover"].forEach((evt) =>
+        dropzone.addEventListener(evt, (e) => {
+          e.preventDefault();
+          dropzone.classList.add("drag-over");
+        })
+      );
+      ["dragleave", "drop"].forEach((evt) =>
+        dropzone.addEventListener(evt, (e) => {
+          e.preventDefault();
+          dropzone.classList.remove("drag-over");
+        })
+      );
+      dropzone.addEventListener("drop", (e) => {
+        if (e.dataTransfer?.files?.length) {
+          filesInput.files = e.dataTransfer.files;
+          describeSelection();
+        }
+      });
+
+      function uploadWithProgress(data) {
+        return new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", "/upload");
+          xhr.upload.addEventListener("progress", (e) => {
+            if (e.lengthComputable) {
+              progressFill.style.width = `${Math.round((e.loaded / e.total) * 100)}%`;
+            }
+          });
+          xhr.addEventListener("load", () => {
+            let body;
+            try {
+              body = JSON.parse(xhr.responseText);
+            } catch {
+              reject(new Error("Invalid server response"));
+              return;
+            }
+            resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, body });
+          });
+          xhr.addEventListener("error", () => reject(new Error("Network error")));
+          xhr.send(data);
+        });
+      }
 
       // Decorative only: a faint field of takeoff-shaped figures behind the
       // upload flow. No takeoff data — just tokens in the shape real values take.
@@ -128,7 +226,10 @@
           const body = await res.json();
           history.innerHTML = "";
           if (body.batches.length === 0) {
-            history.textContent = "No uploads yet.";
+            const empty = document.createElement("div");
+            empty.className = "empty-state";
+            empty.textContent = "No uploads yet — drop a plan above to get started.";
+            history.appendChild(empty);
             return;
           }
           for (const batch of body.batches) {
@@ -141,25 +242,27 @@
 
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
-        const input = document.getElementById("files");
+        const input = filesInput;
         if (!input.files.length) return;
 
         const data = new FormData();
         for (const f of input.files) data.append("files", f);
 
         submit.disabled = true;
+        progressTrack.style.display = "";
+        progressFill.style.width = "0%";
         result.className = "";
-        result.textContent = "Uploading and analyzing...";
+        result.innerHTML = '<span class="spinner"></span>Uploading and analyzing...';
         try {
-          const res = await fetch("/upload", { method: "POST", body: data });
-          const body = await res.json();
-          if (!res.ok) {
+          const { ok, body } = await uploadWithProgress(data);
+          if (!ok) {
             result.className = "err";
-            result.textContent = `Error: ${body.error || res.statusText}`;
+            result.textContent = `Error: ${body.error || "Upload failed"}`;
           } else {
             result.innerHTML = "";
             result.appendChild(renderBatch(body));
             input.value = "";
+            describeSelection();
             loadHistory();
           }
         } catch (err) {
@@ -167,6 +270,7 @@
           result.textContent = `Network error: ${err.message}`;
         } finally {
           submit.disabled = false;
+          progressTrack.style.display = "none";
         }
       });
 

@@ -10,7 +10,15 @@ const { PDFDocument } = require("pdf-lib");
 const Anthropic = require("@anthropic-ai/sdk");
 const { generateSubcontractDocx, FINALIZE_SUBCONTRACT_TOOL } = require("./lib/subcontract");
 const { makeJsonFileStore } = require("./lib/store");
-const { computeSquareFootage, isSelfIntersecting, polygonAreaPixels } = require("./lib/geometry");
+const {
+  computeSquareFootage,
+  computeLinearFootage,
+  isSelfIntersecting,
+  polygonAreaPixels,
+  polylineLengthPixels,
+} = require("./lib/geometry");
+
+const SUPPORTED_QUANTITY_TYPES = ["square_footage", "linear_footage"];
 const { buildCorrectionsReport } = require("./lib/report");
 
 const app = express();
@@ -440,18 +448,25 @@ function decodeDataUrlPng(dataUrl) {
   return Buffer.from(match[1], "base64");
 }
 
-function scoreConfidence({ scale, polygon, areaPixels, canvasWidth, canvasHeight }) {
+function scoreConfidence({ scale, polygon, minPoints, isArea, measurePixels, canvasWidth, canvasHeight }) {
   const reasons = [];
   if (scale.pixelDistance < 40) {
     reasons.push("Calibration line was under 40px — scale may be imprecise.");
   }
-  if (polygon.length < 3) {
-    reasons.push("Boundary has fewer than 3 points — not a valid shape.");
+  if (polygon.length < minPoints) {
+    reasons.push(`${isArea ? "Boundary" : "Line"} has fewer than ${minPoints} points — not a valid shape.`);
     return { level: "invalid", reasons };
   }
-  const canvasArea = canvasWidth * canvasHeight;
-  if (canvasArea > 0 && areaPixels / canvasArea < 0.005) {
-    reasons.push("Traced area is under 0.5% of the visible sheet — check for a mis-click.");
+  if (isArea) {
+    const canvasArea = canvasWidth * canvasHeight;
+    if (canvasArea > 0 && measurePixels / canvasArea < 0.005) {
+      reasons.push("Traced area is under 0.5% of the visible sheet — check for a mis-click.");
+    }
+  } else {
+    const canvasDiagonal = Math.hypot(canvasWidth, canvasHeight);
+    if (canvasDiagonal > 0 && measurePixels / canvasDiagonal < 0.01) {
+      reasons.push("Traced length is under 1% of the sheet diagonal — check for a mis-click.");
+    }
   }
   if (reasons.length > 0) return { level: "low", reasons };
   reasons.push("Manually calibrated and traced by a human against the source sheet; no independent cross-check (e.g. OCR'd dimension match) exists yet, so this cannot be scored 'high'.");
@@ -464,9 +479,11 @@ app.post("/api/takeoffs", (req, res) => {
   if (!fileName || !safeStoredFilePath(UPLOAD_DIR, fileName) || !fs.existsSync(safeStoredFilePath(UPLOAD_DIR, fileName))) {
     return res.status(400).json({ error: "fileName must reference an uploaded file." });
   }
-  if (quantityType !== "square_footage") {
-    return res.status(400).json({ error: "Only quantityType 'square_footage' is supported in V1." });
+  if (!SUPPORTED_QUANTITY_TYPES.includes(quantityType)) {
+    return res.status(400).json({ error: `quantityType must be one of: ${SUPPORTED_QUANTITY_TYPES.join(", ")}.` });
   }
+  const isArea = quantityType === "square_footage";
+  const minPoints = isArea ? 3 : 2;
   const page = pageNumber === undefined ? 1 : Number(pageNumber);
   if (!Number.isInteger(page) || page < 1) {
     return res.status(400).json({ error: "pageNumber must be a positive integer." });
@@ -474,38 +491,56 @@ app.post("/api/takeoffs", (req, res) => {
   if (!scale || typeof scale.pixelDistance !== "number" || scale.pixelDistance <= 0 || typeof scale.realDistance !== "number" || scale.realDistance <= 0) {
     return res.status(400).json({ error: "scale.pixelDistance and scale.realDistance must be positive numbers." });
   }
-  if (!Array.isArray(polygon) || polygon.length < 3 || !polygon.every((p) => typeof p.x === "number" && typeof p.y === "number")) {
-    return res.status(400).json({ error: "polygon must be an array of at least 3 {x,y} points." });
+  if (!Array.isArray(polygon) || polygon.length < minPoints || !polygon.every((p) => typeof p.x === "number" && typeof p.y === "number")) {
+    return res.status(400).json({ error: `polygon must be an array of at least ${minPoints} {x,y} points.` });
   }
-  if (isSelfIntersecting(polygon)) {
-    return res.status(400).json({ error: "Polygon edges cross themselves — retrace the boundary without crossing lines." });
-  }
-  if (polygonAreaPixels(polygon) < 1e-6) {
-    return res.status(400).json({ error: "Polygon has zero area (points are collinear) — not a valid boundary." });
+  if (isArea) {
+    if (isSelfIntersecting(polygon)) {
+      return res.status(400).json({ error: "Polygon edges cross themselves — retrace the boundary without crossing lines." });
+    }
+    if (polygonAreaPixels(polygon) < 1e-6) {
+      return res.status(400).json({ error: "Polygon has zero area (points are collinear) — not a valid boundary." });
+    }
+  } else if (polylineLengthPixels(polygon) < 1e-6) {
+    return res.status(400).json({ error: "Line has zero length — all points coincide." });
   }
   const markupBuffer = decodeDataUrlPng(markupImage);
   if (!markupBuffer) {
     return res.status(400).json({ error: "markupImage must be a PNG data URL (visual proof is required)." });
   }
 
-  const { areaSqFt, areaPixels } = computeSquareFootage(polygon, scale);
+  const measured = isArea ? computeSquareFootage(polygon, scale) : computeLinearFootage(polygon, scale);
+  const value = isArea ? measured.areaSqFt : measured.lengthFt;
+  const measurePixels = isArea ? measured.areaPixels : measured.lengthPixels;
   const confidence = scoreConfidence({
     scale,
     polygon,
-    areaPixels,
+    minPoints,
+    isArea,
+    measurePixels,
     canvasWidth: Number(canvasWidth) || 0,
     canvasHeight: Number(canvasHeight) || 0,
   });
 
   const markupFileName = `${Date.now()}-${crypto.randomUUID()}.png`;
-  fs.writeFileSync(path.join(MARKUP_DIR, markupFileName), markupBuffer);
+  try {
+    fs.writeFileSync(path.join(MARKUP_DIR, markupFileName), markupBuffer);
+  } catch (err) {
+    console.error("Failed to write markup proof:", err.message);
+    const diskFull = err.code === "ENOSPC";
+    return res.status(507).json({
+      error: diskFull
+        ? "Server disk is full — could not save the markup proof. This takeoff was not recorded."
+        : "Could not save the markup proof — this takeoff was not recorded.",
+    });
+  }
 
   const record = takeoffsStore.append({
     fileName,
     pageNumber: page,
     quantityType,
-    value: Math.round(areaSqFt * 100) / 100,
-    unit: "sq ft",
+    value: Math.round(value * 100) / 100,
+    unit: isArea ? "sq ft" : "ft",
     scale,
     polygon,
     confidence: confidence.level,
@@ -581,7 +616,8 @@ app.get("/api/reports/corrections", (_req, res) => {
 });
 
 app.get("/files", (_req, res) => {
-  res.json({ batches });});
+  res.json({ batches });
+});
 
 app.get("/files/:batchId/:storedName", (req, res) => {
   const batch = batches.find((b) => b.id === req.params.batchId);
@@ -595,7 +631,11 @@ app.get("/files/:batchId/:storedName", (req, res) => {
     "Content-Disposition",
     `inline; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(file.originalName)}`
   );
-  res.sendFile(path.join(UPLOAD_DIR, path.basename(file.storedName)));
+  res.sendFile(path.join(UPLOAD_DIR, path.basename(file.storedName)), (err) => {
+    if (err && !res.headersSent) {
+      res.status(404).type("application/json").json({ error: "File is recorded but missing from disk." });
+    }
+  });
 });
 
 // --- Subcontract drafting ---
@@ -674,7 +714,44 @@ app.get("/contracts/:id/download", (req, res) => {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
   );
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-  res.sendFile(path.join(CONTRACTS_DIR, path.basename(contract.storedName)));
+  res.sendFile(path.join(CONTRACTS_DIR, path.basename(contract.storedName)), (err) => {
+    if (err && !res.headersSent) {
+      res.status(404).type("application/json").json({ error: "Contract is recorded but missing from disk." });
+    }
+  });
+});
+
+// --- Centralized error handling ---
+// Anything above that throws synchronously (a bad payload edge case, a native
+// dependency like sharp/pdf-lib rejecting unexpectedly, etc.) previously fell
+// through to Express's default HTML error page. Every route here talks JSON,
+// so an HTML error body just becomes a JSON.parse crash in the browser client
+// instead of a readable message — this keeps every response, success or
+// failure, on the same contract.
+app.use((req, res) => {
+  res.status(404).json({ error: "Not found." });
+});
+
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error("Unhandled request error:", err);
+  if (res.headersSent) return next(err);
+  const isPayloadError = err.type === "entity.too.large" || err.type === "entity.parse.failed";
+  res.status(isPayloadError ? 400 : 500).json({
+    error: isPayloadError ? "Request body is invalid or too large." : "Internal server error.",
+  });
+});
+
+// A crashed process means every in-flight render/upload fails at once and the
+// service stays down until Render restarts it. Logging + staying up (for
+// truly unexpected errors) trades a possible bad in-memory state for
+// continuity; ENOSPC/EMFILE in particular should not take the whole server
+// down when a single write failed.
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
 });
 
 if (require.main === module) {

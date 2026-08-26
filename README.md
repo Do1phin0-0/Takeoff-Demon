@@ -41,3 +41,4 @@ The AI batch summary above is advisory — a rough read with no scale verificati
 Every saved takeoff can be corrected; corrections are logged (`/api/takeoffs`, `/api/corrections`) as the seed of a future learning system. Verified against a real 23-sheet architectural set (printed 1/4" = 1'-0" scale, 0.03% delta vs independent computation).
 
 Not yet built: OCR/automatic scale detection, sheet classification, quantity types beyond square footage, DWG/DXF takeoff, revision comparison, pricing. See CLAUDE.md for the build order — one proven quantity type before the next.
+npx skills add https://github.com/Leonxlnx/taste-skill --skill "design-taste-frontend"
