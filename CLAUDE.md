@@ -4,7 +4,7 @@ Status: active operating layer
 Audience: Claude running inside the AMS Brain / Takeoff-Demon repository
 Incorporates: Core Operating Prompt v1.0 (reconciled — this document is its superset) and Takeoff Execution Layer v1.0 (folded into Sections 10 and 16). This file is the single operating layer; do not create parallel prompt documents.
 
-Maintenance note: Section 8 ("Repo Reality") is a snapshot, not a doctrine. Update it every time a slice ships — a stale baseline here is exactly the failure mode Section 6.1 exists to prevent. Last corrected: 2026-08-19 — added full-screen tracing and a second quantity type (linear footage) to `public/takeoff.html`; test count 56 → 66.
+Maintenance note: Section 8 ("Repo Reality") is a snapshot, not a doctrine. Update it every time a slice ships — a stale baseline here is exactly the failure mode Section 6.1 exists to prevent. Last corrected: 2026-08-26 — added revision comparison (`public/diff.html`, `lib/diff.js`, `POST /api/compare`); test count 66 → 84.
 
 ===============================================================================
 1. IDENTITY AND JOB
@@ -262,6 +262,7 @@ Unless explicitly updated by the repository state, assume this is the baseline t
 - Visual identity — `public/theme.css` (dark ground, single coral accent, JetBrains Mono throughout) applied across all 5 pages, plus a real icon mark (`public/favicon.svg`, inlined in each page's header) drawn from the app's own mechanics — an L-shaped traced boundary with a calibration dimension line, not a generic ruler/hard-hat icon. Every element ID and class the existing JS depends on (`getElementById`, `.confidence-*`, `.status.*`, etc.) was left untouched — this is a CSS/asset-only change, verified against the full test suite plus a headless-browser pass with zero JS errors on all 5 pages. Canvas drawing colors inside `takeoff.html` (blue calibration line, green traced polygon) are untouched — those are functional, drawn by JS, not themed chrome
 - Full-screen tracing (`public/takeoff.html`) — a "Full screen" toggle on `#canvasWrap` (Fullscreen API, standard + webkit-prefixed) so the sheet can be viewed and clicked at full size instead of a 70vh scrollable box; the canvas scales to fit the viewport via CSS only, so click-to-canvas-coordinate math (already ratio-based) is unaffected
 - Linear footage — second quantity type alongside square footage (`lib/geometry.js`: `polylineLengthPixels`/`computeLinearFootage`; `server.js` generalized to accept `quantityType` in `["square_footage", "linear_footage"]`). The takeoff screen now asks which tool after calibration — trace a closed area (≥3 points, filled) or measure an open line (≥2 points, no fill, no wraparound edge). Confidence scoring generalized the same way (length checked against sheet diagonal instead of sheet area). Verified end-to-end in a real browser (upload → calibrate → each tool → save) with the client-side preview matching the server-recomputed value exactly, plus a regression pass confirming the original area tool is unchanged. 10 new tests (geometry math + API validation), 66/66 passing
+- Revision comparison (`public/diff.html`, `lib/diff.js`, `POST /api/compare` + `GET /api/comparisons`) — deliberately the smallest honest slice, not full automated plan diffing: the app does not attempt automatic image registration (that's real computer-vision work this stack has no tooling for). Instead the user pins 2 matching landmarks on each of two uploaded sheets, same click-pattern as scale calibration, and the server computes the exact similarity transform (rotation + uniform scale + translation, `lib/diff.js`) between them, aligns the "before" sheet into the "after" sheet's frame (`sharp` affine + pad/crop), and serves both for a client-side onion-skin slider (`clip-path`, no computed pixel-diff — the human's eye does the actual diffing, which is honest given alignment is only as good as 2 manual pins). An implausible alignment (>15% scale or >5° rotation between the two pins) is flagged as a warning, not silently accepted. An optional AI change-summary is advisory only, gated on `ANTHROPIC_API_KEY`, same disclaimer pattern as the existing upload-time batch summary — nothing here is a verified quantity. Verified end-to-end in a real browser: uploaded two synthetic revisions with a shifted element, pinned an unmoved landmark, aligned with zero warnings, then re-ran with a deliberately bad pin pair and confirmed the scale warning fires. 18 new tests (11 transform/alignment unit tests, 7 API integration tests), 84/84 passing
 
 ## Partially built
 - Database-backed audit trail — audit trail exists (JSON store with timestamps), but it's a flat file, not a real database; fine for V1, will not scale past it
@@ -272,7 +273,7 @@ Unless explicitly updated by the repository state, assume this is the baseline t
 - Sheet classification
 - Quantity types beyond square footage and linear footage — no count tool (fixtures, doors, outlets) yet, and trade-specific derived quantities (drywall sheets, duct runs, conduit) still require manual conversion from the raw area/length value
 - DWG/DXF preview or takeoff (upload is accepted; takeoff.html explicitly declines to run a takeoff on these)
-- Revision comparison
+- Automatic revision-image registration (feature matching / homography) — the manual-pin comparison above is not this; it's a smaller, honest substitute, not the automated version
 - Autonomous estimating
 - Pricing / labor database
 
@@ -293,7 +294,7 @@ Until Mr. A changes it, prioritize work in this order:
 7. **Future architecture**
 8. **Broader doctrine and long-form expansion**
 
-Items 1-5 have a first working slice as of PR #3. The next open priority is item 6 (sheet understanding / classification) or hardening item 1-5 against a real architectural PDF rather than a synthetic test fixture — pick based on what Mr. A actually needs next, not on this list's order alone.
+Items 1-5 have a first working slice as of PR #3. Revision comparison (a smallest-honest-slice, listed under item 1's "Repo Reality" entry) was built ahead of item 6 on 2026-08-26 by Mr. A's explicit choice, not by list order — flagged as jumping the queue before it was built, and confirmed. The next open priority is item 6 (sheet understanding / classification) or hardening items 1-5 against a real architectural PDF rather than a synthetic test fixture — pick based on what Mr. A actually needs next, not on this list's order alone.
 
 If a request conflicts with this order, call out the tradeoff.
 
