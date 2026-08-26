@@ -25,7 +25,7 @@
       Every saved takeoff, newest first, with its markup proof and confidence reasoning.
       Approve what's right; correct what's wrong — both get logged.
     </p>
-    <div id="list">Loading…</div>
+    <div id="list"><span class="spinner"></span>Loading…</div>
 
     <script>
       const list = document.getElementById("list");
@@ -50,9 +50,11 @@
 
           list.innerHTML = "";
           if (takeoffs.length === 0) {
+            list.className = "empty-state";
             list.textContent = "No takeoffs saved yet. Upload a plan and run one from the upload page.";
             return;
           }
+          list.className = "";
 
           for (const t of takeoffs.slice().reverse()) {
             list.appendChild(renderCard(

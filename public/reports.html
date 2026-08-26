@@ -25,7 +25,7 @@
       A read-only rollup of the corrections and review logs — no scoring or learning happens here,
       it just makes the existing logs visible in aggregate instead of write-only.
     </p>
-    <div id="body">Loading…</div>
+    <div id="body"><span class="spinner"></span>Loading…</div>
 
     <script>
       const body = document.getElementById("body");
@@ -44,7 +44,7 @@
           body.innerHTML = "";
 
           if (r.totals.takeoffs === 0) {
-            body.appendChild(el("p", "empty", "No takeoffs saved yet."));
+            body.appendChild(el("p", "empty-state", "No takeoffs saved yet."));
             return;
           }
 
