@@ -39,6 +39,21 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null;
 
+// Estimating knowledge base (knowledge/*.md) — small and static, so it's read
+// once at startup and sent in full rather than retrieved via RAG (ai-agent-book Ch.2:
+// full inclusion + KV-cache reuse over retrieval, when the corpus is small and static).
+const KNOWLEDGE_DIR = path.join(__dirname, "knowledge");
+const KNOWLEDGE_FILES = [
+  "blueprint-reading.md",
+  "easily-missed.md",
+  "price-list.md",
+  "production-rates.md",
+  "trade-scopes.md",
+];
+const KNOWLEDGE_BASE_TEXT = KNOWLEDGE_FILES.map(
+  (name) => `--- ${name} ---\n${fs.readFileSync(path.join(KNOWLEDGE_DIR, name), "utf8")}`
+).join("\n\n");
+
 // Claude reads these directly; DXF gets rendered to PNG first. DWG/TIFF need manual review.
 const ANALYZABLE_IMAGE_TYPES = new Set([
   "image/png",
@@ -309,18 +324,25 @@ async function analyzeBatch(files) {
     content.push({ type: "text", text: `Sheet: ${p.file.originalname}` });
     content.push(p.block);
   }
-  let promptText = TAKEOFF_PROMPT;
   if (skippedFiles.length > 0) {
-    promptText += `\n\nNote: these files were also uploaded but could not be read for analysis; mention that they are stored for manual review: ${skippedFiles
-      .map((s) => s.originalName)
-      .join(", ")}.`;
+    content.push({
+      type: "text",
+      text: `Note: these files were also uploaded but could not be read for analysis; mention that they are stored for manual review: ${skippedFiles
+        .map((s) => s.originalName)
+        .join(", ")}.`,
+    });
   }
-  content.push({ type: "text", text: promptText });
 
   try {
     const message = await anthropic.messages.create({
       model: "claude-sonnet-5",
       max_tokens: 1536,
+      system: [
+        // Cache breakpoint: the knowledge base is ~20k tokens and identical on every
+        // request, so it's marked ephemeral-cacheable and billed/processed once, not per request.
+        { type: "text", text: KNOWLEDGE_BASE_TEXT, cache_control: { type: "ephemeral" } },
+        { type: "text", text: TAKEOFF_PROMPT },
+      ],
       messages: [{ role: "user", content }],
     });
     const text = message.content
