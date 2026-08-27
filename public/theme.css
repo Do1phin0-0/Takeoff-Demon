@@ -260,6 +260,25 @@ form { display: flex; gap: 0.5rem; }
 textarea { flex: 1; resize: vertical; min-height: 2.5rem; }
 .done-card a { font-weight: 600; }
 
+/* index.html: banner distinguishing advisory AI text from verified takeoff computation */
+.notice-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  border: 1px solid var(--amber);
+  background: var(--amber-bg);
+  color: var(--text-dim);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  margin-bottom: 1.25rem;
+  animation: fadeIn 0.4s var(--ease) both;
+}
+.notice-banner svg { flex-shrink: 0; margin-top: 0.15rem; color: var(--amber); }
+.notice-banner strong { color: var(--text); }
+.notice-banner em { color: var(--accent-strong); font-style: normal; }
+
 /* index.html: hero header — letter-reveal title, shimmer sweep, soft glow */
 .hero { position: relative; padding-top: 0.5rem; }
 .hero-glow {
