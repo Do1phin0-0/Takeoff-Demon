@@ -23,3 +23,17 @@ test("POST /contracts/chat validates messages before ever calling the model", as
   assert.equal(res.status, 400);
   assert.match(res.body.error, /messages/);
 });
+
+test("POST /contracts/chat rejects null or non-object message entries with 400 instead of hanging", async () => {
+  const nullOnly = await request(app).post("/contracts/chat").send({ messages: [null] });
+  assert.equal(nullOnly.status, 400);
+  assert.match(nullOnly.body.error, /objects/);
+
+  const mixed = await request(app)
+    .post("/contracts/chat")
+    .send({ messages: [{ role: "user", text: "hi" }, null] });
+  assert.equal(mixed.status, 400);
+
+  const stringEntry = await request(app).post("/contracts/chat").send({ messages: ["hi"] });
+  assert.equal(stringEntry.status, 400);
+});

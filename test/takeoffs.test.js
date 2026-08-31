@@ -64,6 +64,84 @@ test("POST /api/takeoffs rejects a polygon with fewer than 3 points", async () =
   assert.equal(res.status, 400);
 });
 
+test("POST /api/takeoffs rejects a non-finite coordinate smuggled in as 1e999", async () => {
+  const fileName = await uploadOneFile();
+  // JSON has no NaN, but 1e999 parses to Infinity — typeof still says
+  // "number", so only the geometry critic catches it.
+  const raw = JSON.stringify({
+    fileName,
+    quantityType: "square_footage",
+    scale: { pixelDistance: 100, realDistance: 10, unit: "ft" },
+    polygon: [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 1, y: 200 }],
+    markupImage: TINY_PNG_DATA_URL,
+    canvasWidth: 1000,
+    canvasHeight: 1000,
+  }).replace('"x":1,', '"x":1e999,');
+  const res = await request(app).post("/api/takeoffs").type("json").send(raw);
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /non-finite/);
+});
+
+test("POST /api/takeoffs rejects points far outside the sheet canvas", async () => {
+  const fileName = await uploadOneFile();
+  const res = await saveTakeoff(fileName, {
+    polygon: [{ x: 5000, y: 5000 }, { x: 200, y: 0 }, { x: 200, y: 200 }],
+  });
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /outside/);
+});
+
+test("POST /api/takeoffs rejects a physically implausible calibration", async () => {
+  const fileName = await uploadOneFile();
+  const res = await saveTakeoff(fileName, {
+    scale: { pixelDistance: 1, realDistance: 100, unit: "ft" },
+  });
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /implausible/i);
+});
+
+test("POST /api/takeoffs dedupes a double-clicked point instead of rejecting the trace", async () => {
+  const fileName = await uploadOneFile();
+  // Double-clicking a vertex is CAD muscle memory; the zero-length edge is
+  // numerically harmless and must not cost the user their whole trace.
+  const line = await saveTakeoff(fileName, {
+    quantityType: "linear_footage",
+    polygon: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 0 }, { x: 200, y: 0 }],
+  });
+  assert.equal(line.status, 201);
+  assert.equal(line.body.value, 20); // 200px at 10ft/100px
+  assert.equal(line.body.polygon.length, 3, "the duplicate point is dropped from the stored trace");
+
+  // The area case previously failed as a bogus "edges cross themselves".
+  const area = await saveTakeoff(fileName, {
+    polygon: [
+      { x: 0, y: 0 },
+      { x: 200, y: 0 },
+      { x: 200, y: 0 },
+      { x: 200, y: 200 },
+      { x: 0, y: 200 },
+    ],
+  });
+  assert.equal(area.status, 201);
+  assert.equal(area.body.value, 400);
+});
+
+test("POST /api/takeoffs rejects a non-finite calibration smuggled in as 1e999", async () => {
+  const fileName = await uploadOneFile();
+  const raw = JSON.stringify({
+    fileName,
+    quantityType: "square_footage",
+    scale: { pixelDistance: 100, realDistance: 1, unit: "ft" },
+    polygon: [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 100, y: 200 }],
+    markupImage: TINY_PNG_DATA_URL,
+    canvasWidth: 1000,
+    canvasHeight: 1000,
+  }).replace('"realDistance":1,', '"realDistance":1e999,');
+  const res = await request(app).post("/api/takeoffs").type("json").send(raw);
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /finite positive/);
+});
+
 test("POST /api/takeoffs computes linear footage server-side for the length tool", async () => {
   const fileName = await uploadOneFile();
   const res = await saveTakeoff(fileName, {
