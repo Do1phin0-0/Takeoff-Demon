@@ -65,6 +65,20 @@ function spawnCapture(argv) {
       result = spawnSync(resolved, argv.slice(1), { encoding: "utf8", maxBuffer: SPAWN_MAX_BUFFER });
     } else if (resolved) {
       usedShellFallback = true;
+      // shell:true is required here, not a shortcut: Windows cannot spawnSync
+      // a .cmd/.bat file without going through cmd.exe (a platform limitation,
+      // not a design choice — see the Node docs section "Spawning .bat and
+      // .cmd files on Windows"). Re-implementing this with an explicit
+      // spawnSync("cmd.exe", ["/c", ...]) call would not remove the shell
+      // invocation, only hide it behind a different API shape, while losing
+      // Node's own audited handling of it — that would be strictly worse.
+      // The risk is narrowly bounded: win32-only, reached only after a direct
+      // spawnSync ENOENT, and only for a name `where` resolved to a real file
+      // on disk (never an attacker-supplied path) — and every token is
+      // cmd.exe-quoted below (see quoteForCmd) before being joined into the
+      // command line. Covered by the win32-only regression test "win32 shell
+      // fallback preserves args with spaces and metacharacters through a real
+      // .cmd shim" in test/trace.test.js.
       const cmdline = [resolved, ...argv.slice(1)].map(quoteForCmd).join(" ");
       result = spawnSync(cmdline, { encoding: "utf8", shell: true, maxBuffer: SPAWN_MAX_BUFFER });
     }

@@ -13,7 +13,7 @@ import shutil
 import sys
 import zipfile
 from pathlib import Path
-from xml.sax.saxutils import escape
+from html import escape
 
 TEMPLATE = Path(__file__).parent / "AMS_Master_Subcontract_Template.docx"
 
