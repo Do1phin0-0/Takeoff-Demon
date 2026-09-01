@@ -3,82 +3,141 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Takeoff-Demon — Upload</title>
+    <title>AMS Brain — Construction Intelligence</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" />
     <link rel="stylesheet" href="/theme.css" />
     <style>
-      body { max-width: 640px; }
+      body { max-width: 1060px; }
+      /* The workbench holds the live upload flow — keep it readable, not full-bleed. */
+      #workbench { max-width: 760px; margin-left: auto; margin-right: auto; }
     </style>
   </head>
   <body>
     <div class="bg-scatter" id="bgScatter" aria-hidden="true"></div>
-    <div class="hero">
-      <div class="hero-glow" aria-hidden="true"></div>
-      <div class="brand">
-        <svg width="16" height="16" viewBox="0 0 32 32" fill="none"><path d="M7 26 L7 13 L16 13 L16 6 L25 6 L25 26 Z" stroke="#e2664f" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/><circle cx="7" cy="26" r="2.2" fill="#e2664f"/></svg>
-        Takeoff-Demon
-      </div>
-      <h1 id="heroTitle" aria-label="Takeoff-Demon"><span id="heroTitleAnim" aria-hidden="true"></span></h1>
-      <p class="nav" id="heroNav"><a href="/takeoffs.html">Review takeoffs →</a> · <a href="/reports.html">Corrections report →</a> · <a href="/contract">Draft a subcontract →</a></p>
-      <p class="hint" id="heroHint">
-        Upload blueprints or photos. Accepts PDF, PNG, JPG, WebP, TIFF, DWG, DXF.
-        Max 100 MB per file, up to 20 files at once.
-        PDF, PNG, JPG, WebP, and DXF files get one combined AI takeoff summary across the whole batch.
-      </p>
-    </div>
-    <form id="form">
-      <label class="dropzone" id="dropzone" for="files">
-        <svg class="dz-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 16V4M12 4l-4 4M12 4l4 4" />
-          <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-        </svg>
-        <span id="dzLabel">Drop files here, or click to browse</span>
-        <div class="dz-files" id="dzFiles"></div>
-        <input
-          id="files"
-          name="files"
-          type="file"
-          multiple
-          accept=".pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff,.dwg,.dxf,application/pdf,image/*"
-          required
-        />
-      </label>
-      <div class="progress-track" id="progressTrack" style="display:none"><div class="progress-fill" id="progressFill"></div></div>
-      <button type="submit" id="submit">Upload</button>
-    </form>
-    <div id="result"></div>
 
-    <h2>Past uploads</h2>
-    <div id="history"></div>
+    <header class="site-header">
+      <div class="brand">
+        <svg width="18" height="18" viewBox="0 0 32 32" fill="none"><path d="M7 26 L7 13 L16 13 L16 6 L25 6 L25 26 Z" stroke="#00aeef" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/><circle cx="7" cy="26" r="2.2" fill="#00aeef"/></svg>
+        AMS <em>Brain</em>
+      </div>
+      <nav>
+        <a href="#workbench">Takeoff workbench</a>
+        <a href="/takeoffs.html">Review takeoffs</a>
+        <a href="/reports.html">Corrections report</a>
+        <a href="/contract">Draft a subcontract</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div class="hero-glow" aria-hidden="true"></div>
+      <span class="badge">Construction Intelligence Operating System</span>
+      <h1>Construction Intelligence Built for Builders</h1>
+      <p class="sub">
+        Upload plans, calibrate to the sheet's own scale, and trace quantities that come back
+        with markup proof attached. Every number is reviewable, correctable, and logged.
+      </p>
+      <div class="cta-row">
+        <a href="#workbench" class="btn btn-primary">Start takeoff</a>
+        <a href="/takeoffs.html" class="btn btn-secondary">Review saved takeoffs</a>
+      </div>
+    </section>
+
+    <!-- Operational workbench: the live upload flow, not a mockup of one. -->
+    <section id="workbench" class="section">
+      <div class="workbench">
+        <h2 style="margin-top:0">Upload plans &amp; blueprints</h2>
+        <p class="hint">
+          Accepts PDF, PNG, JPG, WebP, TIFF, DWG, DXF. Max 100 MB per file, up to 20 files at once.
+          PDF, PNG, JPG, WebP, and DXF files get one combined AI takeoff summary across the whole batch.
+        </p>
+        <form id="form">
+          <label class="dropzone" id="dropzone" for="files">
+            <svg class="dz-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 16V4M12 4l-4 4M12 4l4 4" />
+              <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+            </svg>
+            <span id="dzLabel">Drop files here, or click to browse</span>
+            <div class="dz-files" id="dzFiles"></div>
+            <input
+              id="files"
+              name="files"
+              type="file"
+              multiple
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff,.dwg,.dxf,application/pdf,image/*"
+              required
+            />
+          </label>
+          <div class="progress-track" id="progressTrack" style="display:none"><div class="progress-fill" id="progressFill"></div></div>
+          <button type="submit" id="submit">Upload &amp; analyze</button>
+        </form>
+        <div id="result"></div>
+      </div>
+
+      <h2>Past uploads</h2>
+      <div id="history"></div>
+    </section>
+
+    <section class="section">
+      <div class="section-title">
+        <h2>What runs today</h2>
+        <p>Capabilities that are built and working — with their current limits stated.</p>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <h3>Plan rendering &amp; sheet navigation</h3>
+          <p>Multi-page PDFs and images render in the browser with a page picker. Scale is held per sheet, so changing pages resets calibration.</p>
+          <span class="card-note">DWG/DXF upload is accepted and stored, but tracing on them is not supported yet.</span>
+        </div>
+        <div class="card">
+          <h3>Calibrated takeoffs</h3>
+          <p>Set scale off a known dimension, then trace a closed area or an open run. Square footage and linear footage are recomputed server-side — the browser's number is never trusted.</p>
+          <span class="card-note">Scale entry is manual calibration; automatic scale detection is not built. No count tool yet.</span>
+        </div>
+        <div class="card">
+          <h3>AI plan summary</h3>
+          <p>At upload, Claude reads the batch and drafts scope, materials, missing information, and constructability concerns across the sheets.</p>
+          <span class="card-note">Advisory only: no scale verification, no markup proof. Not a deliverable quantity.</span>
+        </div>
+        <div class="card">
+          <h3>Subcontract drafting</h3>
+          <p>A guided question-and-answer flow fills the AMS master subcontract and returns a finished .docx, ready to send.</p>
+          <span class="card-note">Scope is entered in the chat — takeoff values are not wired into it yet.</span>
+        </div>
+        <div class="card">
+          <h3>Markup proof &amp; review log</h3>
+          <p>Every saved takeoff stores a snapshot of the calibration line and traced boundary over the plan, plus a confidence rating with its reasons. Approve or correct it, and the change is logged.</p>
+          <span class="card-note">Confidence is capped at medium — no automated cross-check exists yet.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-title">
+        <h2>How a quantity gets produced</h2>
+        <p>Nothing is measured until the sheet is calibrated, and nothing is saved without proof.</p>
+      </div>
+      <div class="flow">
+        <div class="flow-step"><span class="n">01</span><div class="t">Upload plans</div><div class="d">PDF, image, or CAD file</div></div>
+        <div class="flow-arrow" aria-hidden="true">→</div>
+        <div class="flow-step"><span class="n">02</span><div class="t">AI summary</div><div class="d">Advisory scope read</div></div>
+        <div class="flow-arrow" aria-hidden="true">→</div>
+        <div class="flow-step"><span class="n">03</span><div class="t">Calibrate scale</div><div class="d">Two points, known dimension</div></div>
+        <div class="flow-arrow" aria-hidden="true">→</div>
+        <div class="flow-step"><span class="n">04</span><div class="t">Trace quantity</div><div class="d">Area or linear run</div></div>
+        <div class="flow-arrow" aria-hidden="true">→</div>
+        <div class="flow-step"><span class="n">05</span><div class="t">Review &amp; log</div><div class="d">Approve or correct</div></div>
+      </div>
+      <p class="hint" style="text-align:center; margin-top:1rem">
+        Subcontract drafting runs as its own flow at <a href="/contract">/contract</a> — it is not yet fed by takeoff records.
+      </p>
+    </section>
+
+    <footer class="site-footer">
+      AMS Brain / Takeoff-Demon — quantities with proof attached.
+    </footer>
 
     <script>
-      // Hero title: reveal "Takeoff-Demon" one letter at a time, then bring
-      // in the nav/hint once the title has finished. Real text stays in the
-      // h1's aria-label; the letter spans are aria-hidden.
-      (function renderHeroTitle() {
-        const titleText = "Takeoff-Demon";
-        const anim = document.getElementById("heroTitleAnim");
-        const letterDelay = 0.045;
-        const frag = document.createDocumentFragment();
-        titleText.split("").forEach((ch, i) => {
-          const span = document.createElement("span");
-          span.className = "hero-letter";
-          span.textContent = ch === " " ? " " : ch;
-          span.style.animationDelay = `${i * letterDelay}s`;
-          frag.appendChild(span);
-        });
-        anim.appendChild(frag);
-
-        const totalDelay = titleText.length * letterDelay + 0.3;
-        const nav = document.getElementById("heroNav");
-        const hint = document.getElementById("heroHint");
-        nav.style.animationDelay = `${totalDelay}s`;
-        hint.style.animationDelay = `${totalDelay + 0.15}s`;
-        nav.classList.add("hero-fade-in");
-        hint.classList.add("hero-fade-in");
-      })();
-
       const form = document.getElementById("form");
       const submit = document.getElementById("submit");
       const result = document.getElementById("result");
@@ -160,7 +219,7 @@
           span.style.left = `${Math.random() * 100}%`;
           span.style.top = `${Math.random() * 100}%`;
           span.style.fontSize = `${9 + Math.round(Math.random() * 3)}px`;
-          span.style.opacity = (0.035 + Math.random() * 0.05).toFixed(3);
+          span.style.opacity = (0.022 + Math.random() * 0.035).toFixed(3);
           frag.appendChild(span);
         }
         el.appendChild(frag);
