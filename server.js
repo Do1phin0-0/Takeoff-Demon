@@ -389,13 +389,14 @@ async function analyzeBatch(files) {
     content.push({ type: "text", text: `Sheet: ${p.file.originalname}` });
     content.push(p.block);
   }
-  let promptText = TAKEOFF_PROMPT;
   if (skippedFiles.length > 0) {
-    promptText += `\n\nNote: these files were also uploaded but could not be read for analysis; mention that they are stored for manual review: ${skippedFiles
-      .map((s) => s.originalName)
-      .join(", ")}.`;
+    content.push({
+      type: "text",
+      text: `Note: these files were also uploaded but could not be read for analysis; mention that they are stored for manual review: ${skippedFiles
+        .map((s) => s.originalName)
+        .join(", ")}.`,
+    });
   }
-  content.push({ type: "text", text: promptText });
 
   // Dynamic ICL: domain knowledge relevant to reading plan sets, plus real
   // human corrections of past takeoffs as few-shot feedback trajectories.
