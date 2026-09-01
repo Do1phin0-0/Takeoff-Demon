@@ -128,7 +128,8 @@ function batchBytes(batch) {
 
 function deleteBatchFiles(batch) {
   for (const f of batch.files) {
-    fs.promises.unlink(path.join(UPLOAD_DIR, f.storedName)).catch(() => {});
+    const filePath = safeStoredFilePath(UPLOAD_DIR, f.storedName);
+    if (filePath) fs.promises.unlink(filePath).catch(() => {});
   }
 }
 
@@ -175,7 +176,8 @@ function addContract(contract) {
   contracts.unshift(contract);
   while (contracts.length > MAX_CONTRACTS) {
     const evicted = contracts.pop();
-    fs.promises.unlink(path.join(CONTRACTS_DIR, evicted.storedName)).catch(() => {});
+    const filePath = safeStoredFilePath(CONTRACTS_DIR, evicted.storedName);
+    if (filePath) fs.promises.unlink(filePath).catch(() => {});
   }
   return persistContracts();
 }
@@ -817,13 +819,17 @@ app.get("/files/:batchId/:storedName", (req, res) => {
   if (!file) {
     return res.status(404).json({ error: "File not found." });
   }
+  const filePath = safeStoredFilePath(UPLOAD_DIR, file.storedName);
+  if (!filePath) {
+    return res.status(404).json({ error: "File not found." });
+  }
   const safeName = file.originalName.replace(/[\r\n"]/g, "");
   res.setHeader("Content-Type", file.mimeType || "application/octet-stream");
   res.setHeader(
     "Content-Disposition",
     `inline; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(file.originalName)}`
   );
-  res.sendFile(path.join(UPLOAD_DIR, path.basename(file.storedName)), (err) => {
+  res.sendFile(filePath, (err) => {
     if (err && !res.headersSent) {
       res.status(404).type("application/json").json({ error: "File is recorded but missing from disk." });
     }
@@ -1062,13 +1068,17 @@ app.get("/contracts/:id/download", (req, res) => {
   if (!contract) {
     return res.status(404).json({ error: "Contract not found." });
   }
+  const filePath = safeStoredFilePath(CONTRACTS_DIR, contract.storedName);
+  if (!filePath) {
+    return res.status(404).json({ error: "Contract not found." });
+  }
   const filename = `${(contract.subcontractorName || "subcontract").replace(/[^a-zA-Z0-9_-]/g, "_")}.docx`;
   res.setHeader(
     "Content-Type",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
   );
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-  res.sendFile(path.join(CONTRACTS_DIR, path.basename(contract.storedName)), (err) => {
+  res.sendFile(filePath, (err) => {
     if (err && !res.headersSent) {
       res.status(404).type("application/json").json({ error: "Contract is recorded but missing from disk." });
     }
