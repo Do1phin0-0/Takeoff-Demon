@@ -365,6 +365,14 @@
         redraw();
       });
 
+      document.getElementById("undoPoint").addEventListener("click", () => {
+        if (closedPolygon || tracePoints.length === 0) return;
+        tracePoints.pop();
+        document.getElementById("closeShape").disabled = tracePoints.length < 3;
+        document.getElementById("undoPoint").disabled = tracePoints.length === 0;
+        redraw();
+      });
+
       document.getElementById("resetTrace").addEventListener("click", () => {
         tracePoints = [];
         closedPolygon = null;
