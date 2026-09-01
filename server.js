@@ -17,6 +17,7 @@ const {
   polygonAreaPixels,
   polylineLengthPixels,
 } = require("./lib/geometry");
+const { computeSimilarityTransform, alignImageToTarget } = require("./lib/diff");
 
 const { buildCorrectionsReport } = require("./lib/report");
 const { createTraceSession } = require("./lib/trace");
@@ -105,6 +106,12 @@ const TAKEOFF_PROMPT = `You are a construction estimator's assistant reviewing a
 4. Assumptions and caveats — flag anything illegible, ambiguous, contradictory between sheets, or requiring field verification.
 
 Be direct and use bullet points. This is a rough read to help move a project forward, not a certified takeoff — make that limitation clear if quantities are uncertain.`;
+
+const COMPARE_PROMPT = `You are looking at two versions of the same construction plan sheet, already aligned to a common coordinate frame by a human-supplied reference: the first image is the "before" revision, the second is the "after" revision.
+
+List what appears to have changed between them — additions, deletions, relocations, dimension or label changes — as specific, itemized bullets (e.g. "Partition wall appears relocated toward the west side of the grid near the top of the sheet"). Reference visible grid lines, room names, or labels where possible instead of vague positions.
+
+This is a rough visual read to help a human spot likely scope changes faster, not a certified revision comparison. The alignment came from two manually pinned points, not automatic registration, so a shift you see near the edges of the sheet (far from the pinned points) may be alignment drift rather than a real change. State that limitation, and tell the user every item here needs to be verified against the actual sheets before it goes into a change order or contract amendment.`;
 
 const SUBCONTRACT_AGENT_PROMPT =
   fs.readFileSync(path.join(__dirname, "prompts", "subcontract-agent.md"), "utf8") +
@@ -196,14 +203,17 @@ function addContract(contract) {
 // --- Takeoff (measured quantities) storage ---
 
 const MARKUP_DIR = path.join(UPLOAD_DIR, "markups");
+const COMPARE_DIR = path.join(UPLOAD_DIR, "compare");
 // legacy build: supports a wider browser range than the default build,
 // which relies on very new JS builtins (e.g. Map.getOrInsertComputed).
 const PDFJS_DIR = path.join(__dirname, "node_modules", "pdfjs-dist", "legacy", "build");
 fs.mkdirSync(MARKUP_DIR, { recursive: true });
+fs.mkdirSync(COMPARE_DIR, { recursive: true });
 
 const takeoffsStore = makeJsonFileStore(path.join(UPLOAD_DIR, "data", "takeoffs.json"));
 const correctionsStore = makeJsonFileStore(path.join(UPLOAD_DIR, "data", "corrections.json"));
 const reviewsStore = makeJsonFileStore(path.join(UPLOAD_DIR, "data", "reviews.json"));
+const comparisonsStore = makeJsonFileStore(path.join(UPLOAD_DIR, "data", "comparisons.json"));
 
 const ALLOWED_EXTENSIONS = new Set([
   ".pdf",
@@ -494,6 +504,41 @@ async function analyzeBatch(files) {
   }
 }
 
+// Advisory-only, same as analyzeBatch: describes likely changes between two aligned
+// revisions, but there is no server-side verification of any change it names (unlike
+// the measured area/length in the takeoff pipeline, which is computed and checked, not
+// guessed) — see CLAUDE.md Section 6.5 (no unproven quantity as deliverable).
+async function analyzeComparison(afterBuffer, alignedBeforeBuffer) {
+  if (!anthropic) {
+    return { status: "skipped", reason: "AI analysis not configured (missing ANTHROPIC_API_KEY)." };
+  }
+  try {
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 1536,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Before revision (aligned to the after revision's frame):" },
+            { type: "image", source: { type: "base64", media_type: "image/png", data: alignedBeforeBuffer.toString("base64") } },
+            { type: "text", text: "After revision:" },
+            { type: "image", source: { type: "base64", media_type: "image/png", data: afterBuffer.toString("base64") } },
+            { type: "text", text: COMPARE_PROMPT },
+          ],
+        },
+      ],
+    });
+    const text = message.content
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("\n");
+    return { status: "ok", text };
+  } catch (err) {
+    return { status: "error", reason: cleanApiErrorMessage(err, "AI comparison failed.") };
+  }
+}
+
 // --- Upload handling ---
 
 const storage = multer.diskStorage({
@@ -539,8 +584,9 @@ if (AUTH_USERNAME && AUTH_PASSWORD) {
 }
 
 app.use(express.static(path.join(__dirname, "public")));
-// 20mb: takeoff markup proofs arrive as PNG data URLs, far over the 1mb default.
-app.use(express.json({ limit: "20mb" }));
+// 40mb: takeoff markup proofs and (bigger) revision-comparison page pairs arrive
+// as PNG data URLs, far over the 1mb default.
+app.use(express.json({ limit: "40mb" }));
 app.use("/vendor/pdfjs", express.static(PDFJS_DIR));
 
 function safeStoredFilePath(baseDir, requestedName) {
@@ -562,6 +608,14 @@ app.get("/uploads/markups/:filename", (req, res) => {
   const filePath = safeStoredFilePath(MARKUP_DIR, req.params.filename);
   if (!filePath || !fs.existsSync(filePath)) {
     return res.status(404).json({ error: "Markup not found." });
+  }
+  res.sendFile(filePath);
+});
+
+app.get("/uploads/compare/:filename", (req, res) => {
+  const filePath = safeStoredFilePath(COMPARE_DIR, req.params.filename);
+  if (!filePath || !fs.existsSync(filePath)) {
+    return res.status(404).json({ error: "Comparison image not found." });
   }
   res.sendFile(filePath);
 });
@@ -741,6 +795,10 @@ app.post("/api/takeoffs", (req, res) => {
     confidence: confidence.level,
     confidenceReasons: confidence.reasons,
     markupFileName,
+    // markup proof is a snapshot of the canvas, so these are its intrinsic dimensions —
+    // the review page needs them to reserve space and avoid reflow as each proof loads
+    canvasWidth: Number(canvasWidth) || 0,
+    canvasHeight: Number(canvasHeight) || 0,
     note: noteField.value,
   });
 
@@ -816,6 +874,131 @@ app.get("/api/reviews", (_req, res) => {
 app.get("/api/reports/corrections", (_req, res) => {
   const report = buildCorrectionsReport(takeoffsStore.readAll(), correctionsStore.readAll(), reviewsStore.readAll());
   res.json(report);
+});
+
+// --- Revision comparison (plan diffing) ---
+//
+// Smallest honest slice: no automatic image registration (that's a much harder
+// problem than this app currently has tooling for), so the human pins two matching
+// points on each sheet — same interaction pattern as scale calibration — and the
+// server computes the exact similarity transform between them (lib/diff.js) and
+// aligns the "before" sheet into the "after" sheet's frame for an onion-skin slider.
+// The AI changelog, if configured, is advisory only, same as the upload-time batch
+// summary — nothing here is a verified quantity or a certified revision comparison.
+
+function readPointPair(points, label) {
+  if (
+    !Array.isArray(points) ||
+    points.length !== 2 ||
+    !points.every((p) => p && typeof p.x === "number" && typeof p.y === "number")
+  ) {
+    return { error: `${label} must be exactly 2 {x,y} points.` };
+  }
+  return { points };
+}
+
+app.post("/api/compare", async (req, res) => {
+  const {
+    fileNameBefore,
+    pageNumberBefore,
+    imageBefore,
+    canvasWidthBefore,
+    canvasHeightBefore,
+    pointsBefore,
+    fileNameAfter,
+    pageNumberAfter,
+    imageAfter,
+    canvasWidthAfter,
+    canvasHeightAfter,
+    pointsAfter,
+    note,
+  } = req.body || {};
+
+  for (const [fileName] of [[fileNameBefore], [fileNameAfter]]) {
+    const p = fileName && safeStoredFilePath(UPLOAD_DIR, fileName);
+    if (!fileName || !p || !fs.existsSync(p)) {
+      return res.status(400).json({ error: "fileNameBefore and fileNameAfter must each reference an uploaded file." });
+    }
+  }
+
+  const beforePoints = readPointPair(pointsBefore, "pointsBefore");
+  if (beforePoints.error) return res.status(400).json({ error: beforePoints.error });
+  const afterPoints = readPointPair(pointsAfter, "pointsAfter");
+  if (afterPoints.error) return res.status(400).json({ error: afterPoints.error });
+
+  const afterWidth = Number(canvasWidthAfter);
+  const afterHeight = Number(canvasHeightAfter);
+  if (!Number.isInteger(afterWidth) || afterWidth <= 0 || !Number.isInteger(afterHeight) || afterHeight <= 0) {
+    return res.status(400).json({ error: "canvasWidthAfter and canvasHeightAfter must be positive integers." });
+  }
+
+  const beforeBuffer = decodeDataUrlPng(imageBefore);
+  if (!beforeBuffer) return res.status(400).json({ error: "imageBefore must be a PNG data URL." });
+  const afterBuffer = decodeDataUrlPng(imageAfter);
+  if (!afterBuffer) return res.status(400).json({ error: "imageAfter must be a PNG data URL." });
+
+  let transform;
+  try {
+    transform = computeSimilarityTransform(beforePoints.points, afterPoints.points);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+
+  const warnings = [];
+  const scaleOff = Math.abs(transform.scale - 1);
+  if (scaleOff > 0.15) {
+    warnings.push(
+      `Alignment scale is ${transform.scale.toFixed(2)}x — expected close to 1.0 for the same sheet at the same print scale. Check that both point pairs mark the same two physical features.`
+    );
+  }
+  const rotationDegrees = Math.abs((transform.rotationRadians * 180) / Math.PI);
+  if (rotationDegrees > 5) {
+    warnings.push(
+      `Alignment implies a ${rotationDegrees.toFixed(1)}° rotation between sheets — check your pins if the sheets should be right-side-up to each other.`
+    );
+  }
+
+  let alignedBeforeBuffer;
+  try {
+    alignedBeforeBuffer = await alignImageToTarget(beforeBuffer, transform, afterWidth, afterHeight);
+  } catch (err) {
+    return res.status(400).json({ error: `Could not align the images: ${err.message}` });
+  }
+
+  const stamp = `${Date.now()}-${crypto.randomUUID()}`;
+  const alignedBeforeFileName = `${stamp}-before-aligned.png`;
+  const afterFileName = `${stamp}-after.png`;
+  fs.writeFileSync(path.join(COMPARE_DIR, alignedBeforeFileName), alignedBeforeBuffer);
+  fs.writeFileSync(path.join(COMPARE_DIR, afterFileName), afterBuffer);
+
+  const aiSummary = await analyzeComparison(afterBuffer, alignedBeforeBuffer);
+
+  const record = comparisonsStore.append({
+    fileNameBefore,
+    pageNumberBefore: pageNumberBefore ? Number(pageNumberBefore) : 1,
+    fileNameAfter,
+    pageNumberAfter: pageNumberAfter ? Number(pageNumberAfter) : 1,
+    alignedBeforeFileName,
+    afterFileName,
+    canvasWidth: afterWidth,
+    canvasHeight: afterHeight,
+    transform: { scale: transform.scale, rotationRadians: transform.rotationRadians },
+    warnings,
+    note: note || null,
+    aiSummary,
+  });
+
+  res.status(201).json(record);
+});
+
+app.get("/api/comparisons", (_req, res) => {
+  res.json({ comparisons: comparisonsStore.readAll() });
+});
+
+app.get("/api/comparisons/:id", (req, res) => {
+  const record = comparisonsStore.getById(req.params.id);
+  if (!record) return res.status(404).json({ error: "Comparison not found." });
+  res.json(record);
 });
 
 app.get("/files", (_req, res) => {

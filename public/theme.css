@@ -136,7 +136,13 @@ input, select, textarea {
   font-size: 0.85rem;
   transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
 }
-input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-accent-glow); }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: var(--shadow-accent-glow); }
+/* visible focus ring: the box-shadow glow alone is too thin to be the only focus signal */
+input:focus-visible, select:focus-visible, textarea:focus-visible,
+button:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
 input[type="file"] { padding: 0.5rem; border: 1px dashed var(--border-soft); border-radius: 6px; }
 
 .err { color: var(--red); }
