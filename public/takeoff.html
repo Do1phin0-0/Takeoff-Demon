@@ -41,6 +41,13 @@
 
     <div id="canvasWrap">
       <canvas id="canvas"></canvas>
+      <div class="hud-overlay" id="hud" style="display:none">
+        <div><span class="label">STATUS:</span> <span id="hudStatus">READY</span></div>
+        <div><span class="label">LENGTH:</span> <span id="hudLength">—</span></div>
+        <div><span class="label">AREA:</span> <span id="hudArea">—</span></div>
+        <div><span class="label">HEADING:</span> <span id="hudHeading">—</span></div>
+        <div><span class="label">CORNER:</span> <span id="hudCorner">—</span></div>
+      </div>
     </div>
 
     <div class="controls" id="calibrateControls" style="display:none">
@@ -74,6 +81,7 @@
 
     <script type="module">
       import * as pdfjsLib from "/vendor/pdfjs/pdf.min.mjs";
+      import { processPath, getCardinalDirection, calculateCornerAngle } from "/lib/trace.js";
 
       const params = new URLSearchParams(location.search);
       const fileName = params.get("file");
@@ -190,6 +198,7 @@
           setResult(`Rendering page ${p}…`);
           await renderPdfPage(p);
           setResult("");
+          updateHud();
           update();
           const url = new URL(location.href);
           url.searchParams.set("page", String(p));
@@ -205,6 +214,8 @@
         document.getElementById("step1").classList.add("active");
         mode = "calibrating";
         canvas.addEventListener("click", onCanvasClick);
+        document.getElementById("hud").style.display = "block";
+        updateHud();
       }
 
       const canvasWrap = document.getElementById("canvasWrap");
@@ -286,23 +297,144 @@
         };
       }
 
+      // Animates the newest segment growing from `from` to `to` before the point is
+      // committed to state — gives live tracing a "being measured" feel instead of
+      // just popping the final polygon in. Purely cosmetic; commit() runs the real
+      // state update once the draw finishes.
+      function animateSegment(from, to, color, commit) {
+        const duration = 180;
+        const start = performance.now();
+        function frame(now) {
+          const t = Math.min((now - start) / duration, 1);
+          redraw();
+          const cx = from.x + (to.x - from.x) * t;
+          const cy = from.y + (to.y - from.y) * t;
+          ctx.save();
+          ctx.strokeStyle = color;
+          ctx.fillStyle = color;
+          ctx.lineWidth = 2.4;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.moveTo(from.x, from.y);
+          ctx.lineTo(cx, cy);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+          if (t < 1) {
+            requestAnimationFrame(frame);
+          } else {
+            commit();
+          }
+        }
+        requestAnimationFrame(frame);
+      }
+
       function onCanvasClick(evt) {
         const p = canvasPoint(evt);
         if (mode === "calibrating") {
           if (calibrationPoints.length >= 2) calibrationPoints = [];
-          calibrationPoints.push(p);
-          redraw();
-          document.getElementById("confirmCalibration").disabled = calibrationPoints.length !== 2;
+          const from = calibrationPoints[calibrationPoints.length - 1];
+          const commit = () => {
+            calibrationPoints.push(p);
+            redraw();
+            updateHud();
+            document.getElementById("confirmCalibration").disabled = calibrationPoints.length !== 2;
+          };
+          if (from) animateSegment(from, p, "#2563eb", commit);
+          else commit();
         } else if (mode === "tracing") {
+          const from = tracePoints[tracePoints.length - 1];
           // Ignore a double-click on the same spot — CAD muscle memory that
           // would otherwise add a zero-length edge to the trace.
-          const last = tracePoints[tracePoints.length - 1];
-          if (last && last.x === p.x && last.y === p.y) return;
-          tracePoints.push(p);
-          redraw();
+          if (from && from.x === p.x && from.y === p.y) return;
+          const commit = () => {
+            tracePoints.push(p);
+            redraw();
+            updateHud();
+            const minPoints = activeQuantityType === "linear_footage" ? 2 : 3;
+            document.getElementById("finishTrace").disabled = tracePoints.length < minPoints;
+            document.getElementById("undoPoint").disabled = tracePoints.length === 0;
+          };
+          if (from) animateSegment(from, p, "#16a34a", commit);
+          else commit();
+        }
+      }
+
+      function feetPerPixel() {
+        if (!calibration) return null;
+        const feetPerUnit = calibration.unit === "in" ? 1 / 12 : 1;
+        return (calibration.realDistance * feetPerUnit) / calibration.pixelDistance;
+      }
+
+      function updateHud() {
+        const statusEl = document.getElementById("hudStatus");
+        const lengthEl = document.getElementById("hudLength");
+        const areaEl = document.getElementById("hudArea");
+        const headingEl = document.getElementById("hudHeading");
+        const cornerEl = document.getElementById("hudCorner");
+        headingEl.textContent = "—";
+        cornerEl.textContent = "—";
+
+        if (mode === "calibrating") {
+          if (calibrationPoints.length === 0) statusEl.textContent = "AWAITING SCALE REFERENCE";
+          else if (calibrationPoints.length === 1) statusEl.textContent = "CLICK SECOND POINT";
+          else statusEl.textContent = "CONFIRM SCALE BELOW";
+          lengthEl.textContent =
+            calibrationPoints.length === 2 ? `${dist(calibrationPoints[0], calibrationPoints[1]).toFixed(0)} px` : "—";
+          areaEl.textContent = "—";
+        } else if (mode === "tracing") {
           const minPoints = activeQuantityType === "linear_footage" ? 2 : 3;
-          document.getElementById("finishTrace").disabled = tracePoints.length < minPoints;
-          document.getElementById("undoPoint").disabled = tracePoints.length === 0;
+          statusEl.textContent = tracePoints.length < minPoints ? `TRACING — NEED ${minPoints}+ POINTS` : "TRACING";
+          const fpp = feetPerPixel();
+          if (fpp && tracePoints.length > 0) {
+            const segments = processPath(tracePoints, fpp);
+            const totalFeet = segments.length ? segments[segments.length - 1].totalFeet : 0;
+            lengthEl.textContent = `${totalFeet.toFixed(1)} ft`;
+            areaEl.textContent =
+              activeQuantityType === "square_footage" && tracePoints.length >= 3
+                ? `${(polygonAreaPixels(tracePoints) * fpp * fpp).toFixed(1)} sq ft`
+                : "—";
+          } else {
+            lengthEl.textContent = "—";
+            areaEl.textContent = "—";
+          }
+          if (tracePoints.length >= 2) {
+            headingEl.textContent = getCardinalDirection(tracePoints[tracePoints.length - 2], tracePoints[tracePoints.length - 1]);
+          }
+          if (tracePoints.length >= 3) {
+            const angle = calculateCornerAngle(
+              tracePoints[tracePoints.length - 3],
+              tracePoints[tracePoints.length - 2],
+              tracePoints[tracePoints.length - 1]
+            );
+            cornerEl.textContent = `${angle}°`;
+          }
+        } else if (closedPolygon) {
+          statusEl.textContent = "TRACE COMPLETE";
+          const fpp = feetPerPixel();
+          if (fpp && activeQuantityType === "square_footage") {
+            areaEl.textContent = `${(polygonAreaPixels(closedPolygon) * fpp * fpp).toFixed(1)} sq ft`;
+            lengthEl.textContent = "—";
+          } else if (fpp && activeQuantityType === "linear_footage") {
+            const segments = processPath(closedPolygon, fpp);
+            const totalFeet = segments.length ? segments[segments.length - 1].totalFeet : 0;
+            lengthEl.textContent = `${totalFeet.toFixed(1)} ft`;
+            areaEl.textContent = "—";
+          } else {
+            lengthEl.textContent = "—";
+            areaEl.textContent = "—";
+          }
+        } else if (calibration) {
+          statusEl.textContent = "SCALE SET — READY TO TRACE";
+          lengthEl.textContent = "—";
+          areaEl.textContent = "—";
+        } else {
+          statusEl.textContent = "READY";
+          lengthEl.textContent = "—";
+          areaEl.textContent = "—";
         }
       }
 
@@ -311,6 +443,7 @@
         calibration = null;
         document.getElementById("confirmCalibration").disabled = true;
         redraw();
+        updateHud();
       });
 
       document.getElementById("confirmCalibration").addEventListener("click", () => {
@@ -332,6 +465,7 @@
         mode = "idle";
         setResult("");
         redraw();
+        updateHud();
       });
 
       function startTracing(quantityType) {
@@ -352,6 +486,7 @@
         document.getElementById("traceControls").style.display = "flex";
         document.getElementById("saveControls").style.display = "none";
         redraw();
+        updateHud();
       }
       document.getElementById("startArea").addEventListener("click", () => startTracing("square_footage"));
       document.getElementById("startLength").addEventListener("click", () => startTracing("linear_footage"));
@@ -363,6 +498,7 @@
         document.getElementById("finishTrace").disabled = tracePoints.length < minPoints;
         document.getElementById("undoPoint").disabled = tracePoints.length === 0;
         redraw();
+        updateHud();
       });
 
       document.getElementById("resetTrace").addEventListener("click", () => {
@@ -372,6 +508,7 @@
         document.getElementById("undoPoint").disabled = true;
         document.getElementById("saveControls").style.display = "none";
         redraw();
+        updateHud();
       });
 
       document.getElementById("finishTrace").addEventListener("click", () => {
@@ -385,6 +522,7 @@
         document.getElementById("traceControls").style.display = "none";
         document.getElementById("saveControls").style.display = "flex";
         redraw();
+        updateHud();
         showQuantityPreview();
       });
 
