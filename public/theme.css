@@ -421,7 +421,13 @@ textarea { flex: 1; resize: vertical; min-height: 2.5rem; }
 
 /* index.html: faint background field of takeoff figures, decorative only */
 .bg-scatter { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.bg-scatter span { position: absolute; color: var(--accent); font-family: var(--font-mono); white-space: nowrap; animation: fadeIn 1.2s var(--ease) both; }
+/* No animation here on purpose: each span's real opacity target (0.035-0.085,
+   set inline by renderBackgroundScatter in index.html) must be the only value
+   that applies. A fadeIn keyframe ending at opacity:1 with fill-mode "both"
+   permanently wins over that inline opacity once the animation finishes,
+   which turned this "faint background field" into a fully-opaque wall of
+   text sitting on top of the real UI. */
+.bg-scatter span { position: absolute; color: var(--accent); font-family: var(--font-mono); white-space: nowrap; }
 
 .markup img { transition: transform 0.2s var(--ease); }
 .markup img:hover { transform: scale(1.01); }

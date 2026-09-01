@@ -72,10 +72,16 @@ test("mid-conversation: server relays Claude's text reply and doesn't generate a
   assert.equal(res.body.done, false);
   assert.equal(res.body.reply, "What's the subcontractor's company name and address?");
 
-  // Verify the request we actually sent Claude carries the real AMS prompt and tool.
-  assert.match(lastCallArgs.system, /AMS Construction/);
-  assert.match(lastCallArgs.system, /finalize_subcontract/);
+  // Verify the request we actually sent Claude carries the real AMS prompt and
+  // tool. system is a cache-control block array; its text is the assembled prompt.
+  assert.equal(lastCallArgs.system[0].cache_control.type, "ephemeral");
+  assert.match(lastCallArgs.system[0].text, /AMS Construction/);
+  assert.match(lastCallArgs.system[0].text, /finalize_subcontract/);
   assert.equal(lastCallArgs.tools[0].name, "finalize_subcontract");
+  // One tool_use per turn, guaranteed — the reflection's single tool_result
+  // depends on it.
+  assert.equal(lastCallArgs.tool_choice.disable_parallel_tool_use, true);
+  assert.ok(lastCallArgs.max_tokens >= 4096, "payload + adaptive thinking need more than 1536");
   assert.equal(lastCallArgs.messages[0].role, "user");
   assert.equal(lastCallArgs.messages[0].content[0].text, "I need a plumbing subcontract for project 2");
 });
@@ -160,4 +166,157 @@ test("a structured Anthropic API error surfaces its human-readable message, not 
 
   assert.equal(res.status, 502);
   assert.equal(res.body.error, "Could not process PDF");
+});
+
+test("a persistently invalid tool payload exhausts reflexion at 2 attempts and returns 422, never reaching docx", async () => {
+  // The critic now intercepts a broken payload BEFORE docx compilation; a
+  // model that keeps returning it gets exactly 2 reflection chances (each an
+  // is_error tool_result), then a 422 with the issues — hard cap enforced.
+  const brokenFields = { ...sampleFields, scopeItems: "not-an-array" };
+  let calls = 0;
+  let sawErrorToolResult = false;
+  messagesProto.create = async (params) => {
+    calls += 1;
+    const last = params.messages[params.messages.length - 1];
+    if (Array.isArray(last.content) && last.content.some((b) => b.type === "tool_result" && b.is_error)) {
+      sawErrorToolResult = true;
+    }
+    return {
+      content: [
+        { type: "tool_use", id: `toolu_bad_${calls}`, name: "finalize_subcontract", input: brokenFields },
+      ],
+    };
+  };
+
+  const res = await request(app)
+    .post("/contracts/chat")
+    .send({ messages: [{ role: "user", text: "finalize it" }] });
+
+  assert.equal(res.status, 422);
+  assert.equal(calls, 3, "1 initial call + exactly 2 reflection attempts");
+  assert.ok(sawErrorToolResult, "reflection must use the is_error tool_result protocol");
+  assert.ok(res.body.issues.some((m) => /scopeItems/.test(m)));
+  assert.equal(res.body.fields.subcontractor.companyName, "Lone Star Plumbing LLC");
+});
+
+test("reflexion repairs an invalid tool payload on the first retry and generates the contract", async () => {
+  let calls = 0;
+  messagesProto.create = async () => {
+    calls += 1;
+    const input = calls === 1 ? { ...sampleFields, subcontractTotal: "" } : sampleFields;
+    return {
+      content: [{ type: "tool_use", id: `toolu_fix_${calls}`, name: "finalize_subcontract", input }],
+    };
+  };
+
+  const res = await request(app)
+    .post("/contracts/chat")
+    .send({ messages: [{ role: "user", text: "finalize it" }] });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.done, true);
+  assert.equal(calls, 2, "one reflection call repaired the payload");
+  assert.equal(res.body.fields.subcontractTotal, "$145,000.00");
+});
+
+test("a text-only reflection response becomes a normal done:false reply (model asking for missing info)", async () => {
+  let calls = 0;
+  messagesProto.create = async () => {
+    calls += 1;
+    if (calls === 1) {
+      return {
+        content: [
+          {
+            type: "tool_use",
+            id: "toolu_ask",
+            name: "finalize_subcontract",
+            input: { ...sampleFields, subcontractor: { ...sampleFields.subcontractor, email: "" } },
+          },
+        ],
+      };
+    }
+    return { content: [{ type: "text", text: "What is the subcontractor's email address?" }] };
+  };
+
+  const res = await request(app)
+    .post("/contracts/chat")
+    .send({ messages: [{ role: "user", text: "finalize it" }] });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.done, false);
+  assert.equal(res.body.reply, "What is the subcontractor's email address?");
+  assert.equal(calls, 2);
+});
+
+test("a max_tokens-truncated response returns 502 instead of a cut-off fragment as a reply", async () => {
+  messagesProto.create = async () => ({
+    stop_reason: "max_tokens",
+    content: [{ type: "text", text: "Here is the subcontract you asked f" }],
+  });
+
+  const res = await request(app)
+    .post("/contracts/chat")
+    .send({ messages: [{ role: "user", text: "finalize it" }] });
+
+  assert.equal(res.status, 502);
+  assert.match(res.body.error, /cut off/);
+});
+
+test("an API failure during reflection reports as 502 upstream error, not model incorrigibility", async () => {
+  let calls = 0;
+  messagesProto.create = async () => {
+    calls += 1;
+    if (calls === 1) {
+      return {
+        content: [
+          {
+            type: "tool_use",
+            id: "toolu_flaky",
+            name: "finalize_subcontract",
+            input: { ...sampleFields, subcontractTotal: "" },
+          },
+        ],
+      };
+    }
+    throw new Error("simulated overloaded_error");
+  };
+
+  const res = await request(app)
+    .post("/contracts/chat")
+    .send({ messages: [{ role: "user", text: "finalize it" }] });
+
+  assert.equal(res.status, 502);
+  assert.match(res.body.error, /simulated overloaded_error/);
+  assert.equal(calls, 2, "the loop stops on the first reflect failure");
+});
+
+test("a docx-generation failure after a critic-valid tool call returns 500 with the collected fields, not 502", async () => {
+  // Payload passes the critic; the local .docx write fails instead — a local
+  // failure that must not wear upstream semantics or discard the fields.
+  messagesProto.create = async () => ({
+    content: [
+      { type: "tool_use", id: "toolu_02def", name: "finalize_subcontract", input: sampleFields },
+    ],
+  });
+  const realWriteFile = fs.promises.writeFile;
+  fs.promises.writeFile = async (p, ...args) => {
+    if (String(p).endsWith(".docx")) {
+      const e = new Error("ENOSPC: no space left on device, write");
+      e.code = "ENOSPC";
+      throw e;
+    }
+    return realWriteFile(p, ...args);
+  };
+  try {
+    const res = await request(app)
+      .post("/contracts/chat")
+      .send({ messages: [{ role: "user", text: "finalize it" }] });
+
+    assert.equal(res.status, 500);
+    assert.match(res.body.error, /generating or saving the document failed/);
+    assert.ok(!res.body.error.includes("ENOSPC"), "raw fs error must not leak to the client");
+    assert.equal(res.body.fields.subcontractor.companyName, "Lone Star Plumbing LLC");
+  } finally {
+    fs.promises.writeFile = realWriteFile;
+  }
 });

@@ -294,6 +294,10 @@
           redraw();
           document.getElementById("confirmCalibration").disabled = calibrationPoints.length !== 2;
         } else if (mode === "tracing") {
+          // Ignore a double-click on the same spot — CAD muscle memory that
+          // would otherwise add a zero-length edge to the trace.
+          const last = tracePoints[tracePoints.length - 1];
+          if (last && last.x === p.x && last.y === p.y) return;
           tracePoints.push(p);
           redraw();
           const minPoints = activeQuantityType === "linear_footage" ? 2 : 3;

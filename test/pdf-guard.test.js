@@ -18,9 +18,18 @@ delete process.env.AUTH_PASSWORD;
 // it here also intercepts the client server.js builds internally.
 const messagesProto = Object.getPrototypeOf(new Anthropic({ apiKey: "probe" }).messages);
 let callCount = 0;
+// The mocked summary must satisfy lib/critic.js's structural contract (four
+// numbered sections, caveats, min length) or the reflexion loop re-calls the
+// model and the exact-call-count assertions below stop meaning anything.
+const VALID_SUMMARY = [
+  "1. What this set shows: a synthetic test sheet set (sheet.pdf) exercising the analysis pipeline end to end.",
+  "2. Key materials and quantities: no measurable quantities are visible on these blank test pages.",
+  "3. Notable scope items or trades: none identifiable from blank test sheets.",
+  "4. Assumptions and caveats: pages are blank test fixtures; every statement above requires field verification.",
+].join("\n");
 messagesProto.create = async () => {
   callCount += 1;
-  return { content: [{ type: "text", text: "Takeoff summary." }] };
+  return { content: [{ type: "text", text: VALID_SUMMARY }] };
 };
 
 const request = require("supertest");
@@ -59,6 +68,36 @@ test("a PDF over the 100-page limit is skipped before ever calling Claude", asyn
   assert.match(res.body.analysis.skippedFiles[0].reason, /105 pages/);
   assert.match(res.body.analysis.skippedFiles[0].reason, /100-page limit/);
   assert.equal(callCount, 0, "Claude should never be called for a file we already know is too big");
+});
+
+test("an fs error reading a stored file degrades to a skip instead of hanging the upload", async () => {
+  callCount = 0;
+  // Simulate the stored file being unreadable (locked, vanished, EIO) between
+  // multer's write and prepareFile's read — server.js captured this same fs
+  // module object at require time, so patching here intercepts its reads.
+  const realRead = fs.readFileSync;
+  fs.readFileSync = (p, ...args) => {
+    if (String(p).includes("unreadable-marker")) {
+      const e = new Error("EIO: i/o error, read");
+      e.code = "EIO";
+      throw e;
+    }
+    return realRead(p, ...args);
+  };
+  try {
+    const res = await request(app)
+      .post("/upload")
+      .attach("files", Buffer.from([0x89, 0x50, 0x4e, 0x47]), {
+        filename: "unreadable-marker.png",
+        contentType: "image/png",
+      });
+    assert.equal(res.status, 200, "the upload must respond, not hang");
+    assert.equal(res.body.analysis.status, "skipped");
+    assert.match(res.body.analysis.skippedFiles[0].reason, /Could not read this file for analysis/);
+    assert.equal(callCount, 0);
+  } finally {
+    fs.readFileSync = realRead;
+  }
 });
 
 test("a corrupted/unreadable PDF is skipped with a clear reason instead of crashing", async () => {
