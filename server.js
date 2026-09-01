@@ -18,13 +18,22 @@ const {
   polylineLengthPixels,
 } = require("./lib/geometry");
 
-const SUPPORTED_QUANTITY_TYPES = ["square_footage", "linear_footage"];
 const { buildCorrectionsReport } = require("./lib/report");
 const { createTraceSession } = require("./lib/trace");
 const { loadKnowledge, buildTrajectories, buildSystemPrompt } = require("./lib/icl");
 const { critiqueTakeoffSummary, critiqueContractPayload, critiqueTakeoffGeometry } = require("./lib/critic");
 // Pure dependency-injected loop — safe in the server graph, unlike run-feedback.
 const { runWithReflexion } = require("./agent/reflexion");
+
+const SUPPORTED_QUANTITY_TYPES = ["square_footage", "linear_footage"];
+// Absolute floor for a computed polygon area (px²) / polyline length (px) to
+// count as non-degenerate. This is a tolerance in canvas-pixel magnitude, not
+// a float-equality epsilon — Number.EPSILON (~2.22e-16) is scaled for values
+// near 1 and is far tighter than the rounding noise these pixel-space sums
+// actually produce, so using it here would let truly zero-area/zero-length
+// traces (rounding-noise areas around 1e-10 to 1e-12 at typical canvas
+// coordinate scales) slip past this check instead of being rejected.
+const MIN_MEASURABLE_PIXELS = 1e-6;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -675,10 +684,10 @@ app.post("/api/takeoffs", (req, res) => {
     if (isSelfIntersecting(polygon)) {
       return res.status(400).json({ error: "Polygon edges cross themselves — retrace the boundary without crossing lines." });
     }
-    if (polygonAreaPixels(polygon) < 1e-6) {
+    if (polygonAreaPixels(polygon) < MIN_MEASURABLE_PIXELS) {
       return res.status(400).json({ error: "Polygon has zero area (points are collinear) — not a valid boundary." });
     }
-  } else if (polylineLengthPixels(polygon) < 1e-6) {
+  } else if (polylineLengthPixels(polygon) < MIN_MEASURABLE_PIXELS) {
     return res.status(400).json({ error: "Line has zero length — all points coincide." });
   }
   // Geometry critic: anomaly classes the checks above miss — NaN/Infinity
