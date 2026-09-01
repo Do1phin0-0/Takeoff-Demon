@@ -11,8 +11,13 @@ COPY lib ./lib
 COPY prompts ./prompts
 COPY templates ./templates
 
-RUN mkdir -p /app/uploads
+RUN mkdir -p /app/uploads && chown -R node:node /app
 ENV PORT=3000
 EXPOSE 3000
+
+# Run as the non-root "node" user (built into the node:alpine base image)
+# instead of root — uploads/ is chowned above so the app can still write
+# its own data/markups/contracts/traces subdirectories under it at runtime.
+USER node
 
 CMD ["node", "server.js"]

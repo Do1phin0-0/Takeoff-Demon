@@ -190,14 +190,18 @@ test("createTraceSession prunes trace files beyond the retention cap, newest kep
 test("secret env values are redacted from captured output", () => {
   const dir = tmpTraceDir();
   const original = process.env.ANTHROPIC_API_KEY;
-  process.env.ANTHROPIC_API_KEY = "sk-test-secret-value-123456";
+  // Not a real key shape (no "sk-" prefix) on purpose — this is a fixture
+  // value for the redaction test below, set into the env var the test
+  // exercises, not a credential of any kind.
+  const fixtureValue = "test-fixture-not-a-real-credential-123456";
+  process.env.ANTHROPIC_API_KEY = fixtureValue;
   try {
     const { event } = runWithFeedback(
       [process.execPath, "-e", "console.log('key is ' + process.env.ANTHROPIC_API_KEY)"],
       { label: "secret-case", traceDir: dir }
     );
     assert.match(event.payload.stdout, /\[redacted:ANTHROPIC_API_KEY\]/);
-    assert.ok(!event.payload.stdout.includes("sk-test-secret-value-123456"));
+    assert.ok(!event.payload.stdout.includes(fixtureValue));
   } finally {
     if (original === undefined) delete process.env.ANTHROPIC_API_KEY;
     else process.env.ANTHROPIC_API_KEY = original;
@@ -207,7 +211,11 @@ test("secret env values are redacted from captured output", () => {
 test("a secret straddling the truncation boundary leaves no fragment in the trace", () => {
   const dir = tmpTraceDir();
   const original = process.env.ANTHROPIC_API_KEY;
-  const secret = "sk-test-straddle-secret-abcdef0123456789";
+  // Not a real key shape (no "sk-" prefix) — a fixture value set into the
+  // env var this test exercises, not a credential. Its exact content is
+  // otherwise arbitrary: the boundary math below derives entirely from
+  // secret.length.
+  const secret = "test-fixture-straddle-boundary-abcdef0123456789";
   process.env.ANTHROPIC_API_KEY = secret;
   try {
     // Pad after the secret so the 200KB tail cut lands mid-secret: redaction
