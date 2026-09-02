@@ -19,7 +19,11 @@
       AMS <em>Brain</em>
     </div>
     <h1>Takeoff</h1>
-    <p class="hint" style="margin-bottom:0.5rem"><a href="/index.html">← Upload</a> · <a href="/takeoffs.html">Review takeoffs →</a> · <a href="/diff.html">Compare revisions →</a></p>
+    <div class="controls" style="margin-top:0">
+      <a href="/index.html" class="secondary" style="text-decoration:none;padding:0.4rem 0.8rem;border-radius:6px;border:1px solid var(--border)">← Upload</a>
+      <a href="/takeoffs.html" style="text-decoration:none;padding:0.4rem 0.8rem;border-radius:6px;background:var(--accent);color:var(--accent-contrast);font-weight:600">📋 Review takeoffs</a>
+      <a href="/diff.html" class="secondary" style="text-decoration:none;padding:0.4rem 0.8rem;border-radius:6px;border:1px solid var(--border)">Compare revisions →</a>
+    </div>
     <p class="hint" id="fileLabel">Loading file…</p>
 
     <div class="controls" id="pageControls" style="display:none">
@@ -52,10 +56,40 @@
       </div>
     </div>
 
+    <div class="controls" id="lastScaleControls" style="display:none">
+      <span id="lastScaleLabel"></span>
+      <button id="useLastScale">Use that scale for this page</button>
+      <button class="secondary" id="dismissLastScale">No, recalibrate</button>
+    </div>
+
+    <div class="controls" id="printedScaleControls" style="display:none">
+      <span>Know the printed scale? Set it directly — no clicking required:</span>
+      <select id="printedScale" name="printedScale" aria-label="Printed drawing scale">
+        <option value="">— select —</option>
+        <option value="0.0625">1/16" = 1'-0"</option>
+        <option value="0.09375">3/32" = 1'-0"</option>
+        <option value="0.125">1/8" = 1'-0"</option>
+        <option value="0.1875">3/16" = 1'-0"</option>
+        <option value="0.25">1/4" = 1'-0"</option>
+        <option value="0.375">3/8" = 1'-0"</option>
+        <option value="0.5">1/2" = 1'-0"</option>
+        <option value="0.75">3/4" = 1'-0"</option>
+        <option value="1">1" = 1'-0"</option>
+        <option value="1.5">1-1/2" = 1'-0"</option>
+        <option value="3">3" = 1'-0"</option>
+        <option value="12">Full size (1:1)</option>
+      </select>
+      <button id="usePrintedScale" disabled>Set scale</button>
+      <span class="hint" style="margin:0">Assumes this PDF was exported at actual size. Verify against a known dimension before trusting it.</span>
+    </div>
+
     <div class="controls" id="calibrateControls" style="display:none">
-      <span>Click two points on a known dimension, then enter its real length:</span>
-      <input type="number" id="realDistance" name="realDistance" aria-label="Real-world length of the calibration line" autocomplete="off" placeholder="length" min="0" step="0.01" style="width:6rem" />
-      <select id="realUnit" name="realUnit" aria-label="Unit of the calibration length"><option value="ft">ft</option><option value="in">in</option></select>
+      <span>Or click two points on a known dimension, then enter its real length:</span>
+      <input type="text" id="realDistance" name="realDistance" aria-label="Real-world length of the calibration line" autocomplete="off" placeholder="e.g. 12'-6 1/2&quot; or 6' or 18&quot;" style="width:9rem" />
+      <select id="realUnit" name="realUnit" aria-label="Unit when entering a plain number">
+        <option value="ft">plain number = ft</option>
+        <option value="in">plain number = in</option>
+      </select>
       <button id="confirmCalibration" disabled>Confirm calibration</button>
       <button class="secondary" id="resetCalibration">Reset</button>
     </div>
@@ -102,6 +136,39 @@
       let pdfDoc = null;
       let currentPage = Math.max(1, parseInt(params.get("page"), 10) || 1);
       let totalPages = 1;
+      let currentRenderScale = null; // canvas pixels per PDF point (72 points = 1 inch), set on each PDF page render
+      let lastConfirmedScale = null; // {pixelDistance, realDistance, unit, label} from the most recently confirmed page
+
+      // Parses architectural dimension strings: 12'-6 1/2", 6', 18", 1/2, 10.5 …
+      // Falls back to a plain number interpreted via unitFallback ("ft"|"in").
+      function parseMixedNumber(s) {
+        s = s.trim();
+        if (!s) return 0;
+        const m = s.match(/^(\d+(?:\.\d+)?)?\s*(?:(\d+)\/(\d+))?$/);
+        if (!m || (!m[1] && !m[2])) return NaN;
+        const whole = m[1] ? parseFloat(m[1]) : 0;
+        const frac = m[2] && m[3] ? parseFloat(m[2]) / parseFloat(m[3]) : 0;
+        return whole + frac;
+      }
+      function parseDimensionToFeet(raw, unitFallback) {
+        const str = (raw || "").trim();
+        if (!str) return NaN;
+        if (str.includes("'")) {
+          const [feetPart, rest = ""] = str.split("'");
+          const feet = parseFloat(feetPart);
+          if (!Number.isFinite(feet)) return NaN;
+          const inchesStr = rest.replace(/"/g, "").replace(/^-/, "").trim();
+          const inches = inchesStr ? parseMixedNumber(inchesStr) : 0;
+          return Number.isNaN(inches) ? NaN : feet + inches / 12;
+        }
+        if (str.includes('"')) {
+          const inches = parseMixedNumber(str.replace(/"/g, "").trim());
+          return Number.isNaN(inches) ? NaN : inches / 12;
+        }
+        const val = parseMixedNumber(str);
+        if (Number.isNaN(val)) return NaN;
+        return unitFallback === "in" ? val / 12 : val;
+      }
 
       function setResult(text, cls) {
         resultEl.textContent = text;
@@ -161,6 +228,7 @@
         const viewport = page.getViewport({ scale });
         canvas.width = viewport.width;
         canvas.height = viewport.height;
+        currentRenderScale = scale; // canvas pixels per PDF point at this render
         await page.render({ canvasContext: ctx, viewport }).promise;
         sourceImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
         fileLabel.textContent = `File: ${fileName} — page ${pageNum} of ${totalPages}`;
@@ -187,8 +255,10 @@
           closedPolygon = null;
           activeQuantityType = null;
           mode = "calibrating";
+          document.querySelectorAll(".controls.correction-form").forEach((el) => el.remove());
+          setResult("");
           document.getElementById("confirmCalibration").disabled = true;
-          document.getElementById("calibrateControls").style.display = "flex";
+          showCalibrationEntryPoints();
           document.getElementById("startTraceControls").style.display = "none";
           document.getElementById("traceControls").style.display = "none";
           document.getElementById("saveControls").style.display = "none";
@@ -211,8 +281,21 @@
         document.getElementById("goPage").addEventListener("click", () => changePage(parseInt(input.value, 10) || currentPage));
       }
 
-      function afterSourceLoaded() {
+      function showCalibrationEntryPoints() {
         document.getElementById("calibrateControls").style.display = "flex";
+        document.getElementById("printedScaleControls").style.display = pdfDoc ? "flex" : "none";
+        const lastScaleControls = document.getElementById("lastScaleControls");
+        if (lastConfirmedScale) {
+          document.getElementById("lastScaleLabel").textContent =
+            `This file was last calibrated at ${lastConfirmedScale.label || lastConfirmedScale.realDistance + " " + lastConfirmedScale.unit}.`;
+          lastScaleControls.style.display = "flex";
+        } else {
+          lastScaleControls.style.display = "none";
+        }
+      }
+
+      function afterSourceLoaded() {
+        showCalibrationEntryPoints();
         document.getElementById("step1").classList.add("active");
         mode = "calibrating";
         canvas.addEventListener("click", onCanvasClick);
@@ -258,7 +341,7 @@
           const mid = midpoint(calibrationPoints[0], calibrationPoints[1]);
           ctx.fillStyle = "#2563eb";
           ctx.font = "14px sans-serif";
-          ctx.fillText(`${calibration.realDistance} ${calibration.unit}`, mid.x + 6, mid.y - 6);
+          ctx.fillText(calibration.label || `${calibration.realDistance} ${calibration.unit}`, mid.x + 6, mid.y - 6);
         }
 
         const pts = closedPolygon || tracePoints;
@@ -448,26 +531,61 @@
         updateHud();
       });
 
-      document.getElementById("confirmCalibration").addEventListener("click", () => {
-        const realDistance = parseFloat(document.getElementById("realDistance").value);
-        const unit = document.getElementById("realUnit").value;
-        if (!realDistance || realDistance <= 0) {
-          fail("Enter the real-world distance for the calibration line first.");
-          return;
-        }
-        calibration = {
-          pixelDistance: dist(calibrationPoints[0], calibrationPoints[1]),
-          realDistance,
-          unit,
-        };
+      // Commits a resolved calibration (from any of the three entry paths) and
+      // advances the UI from "calibrate" to "ready to trace."
+      function applyCalibration(cal) {
+        calibration = cal;
+        lastConfirmedScale = cal;
         document.getElementById("step1").classList.remove("active");
         document.getElementById("step1").classList.add("done");
         document.getElementById("calibrateControls").style.display = "none";
+        document.getElementById("printedScaleControls").style.display = "none";
+        document.getElementById("lastScaleControls").style.display = "none";
         document.getElementById("startTraceControls").style.display = "flex";
         mode = "idle";
         setResult("");
         redraw();
         updateHud();
+      }
+
+      document.getElementById("confirmCalibration").addEventListener("click", () => {
+        const raw = document.getElementById("realDistance").value;
+        const unit = document.getElementById("realUnit").value;
+        const realDistance = parseDimensionToFeet(raw, unit);
+        if (!Number.isFinite(realDistance) || realDistance <= 0) {
+          fail(`Couldn't read "${raw}" as a length. Try formats like 12'-6 1/2", 6', 18", or a plain number.`);
+          return;
+        }
+        applyCalibration({
+          pixelDistance: dist(calibrationPoints[0], calibrationPoints[1]),
+          realDistance,
+          unit: "ft",
+          label: raw,
+        });
+      });
+
+      document.getElementById("printedScale").addEventListener("change", (e) => {
+        document.getElementById("usePrintedScale").disabled = !e.target.value;
+      });
+      document.getElementById("usePrintedScale").addEventListener("click", () => {
+        const inchesPerFoot = parseFloat(document.getElementById("printedScale").value);
+        if (!inchesPerFoot || !currentRenderScale) return;
+        // canvas pixels per inch of the printed sheet = currentRenderScale (px/PDF-point) * 72 (points/inch).
+        // At `inchesPerFoot` printed inches per real foot, one real foot = inchesPerFoot * pxPerInch canvas pixels.
+        const pxPerInch = currentRenderScale * 72;
+        applyCalibration({
+          pixelDistance: inchesPerFoot * pxPerInch,
+          realDistance: 1,
+          unit: "ft",
+          label: `printed scale (${document.getElementById("printedScale").selectedOptions[0].textContent})`,
+        });
+      });
+
+      document.getElementById("useLastScale").addEventListener("click", () => {
+        if (lastConfirmedScale) applyCalibration(lastConfirmedScale);
+      });
+      document.getElementById("dismissLastScale").addEventListener("click", () => {
+        document.getElementById("lastScaleControls").style.display = "none";
       });
 
       function startTracing(quantityType) {
@@ -596,8 +714,8 @@
             `Value: ${record.value} ${record.unit}\n` +
             `Confidence: ${record.confidence}\n` +
             record.confidenceReasons.map((r) => `  - ${r}`).join("\n") +
-            `\nMarkup proof: /uploads/markups/${record.markupFileName}\n\n` +
-            `If this number is wrong, correct it below.`,
+            `\nMarkup proof: /uploads/markups/${record.markupFileName}` +
+            `\n\nSaved. Find it anytime on the Review takeoffs page (link above).`,
           cls
         );
         showCorrectionForm(record);
@@ -605,14 +723,24 @@
 
       function showCorrectionForm(record) {
         const wrap = document.createElement("div");
-        wrap.className = "controls";
+        wrap.className = "controls correction-form";
         wrap.innerHTML = `
+          <button class="secondary" id="toggleCorrection">Wrong number? Make a correction ▾</button>
+        `;
+        resultEl.after(wrap);
+        const formHtml = `
           <span>Correction:</span>
           <input type="number" id="correctedValue" name="correctedValue" aria-label="Corrected value" autocomplete="off" placeholder="correct value" step="0.01" style="width:8rem" />
           <input type="text" id="correctionNote" name="correctionNote" aria-label="Reason for the correction" autocomplete="off" placeholder="why" style="flex:1;min-width:10rem" />
           <button id="submitCorrection">Submit correction</button>
         `;
-        resultEl.after(wrap);
+        wrap.querySelector("#toggleCorrection").addEventListener("click", () => {
+          wrap.innerHTML = formHtml;
+          wireCorrectionSubmit(wrap, record);
+        });
+      }
+
+      function wireCorrectionSubmit(wrap, record) {
         wrap.querySelector("#submitCorrection").addEventListener("click", async () => {
           const correctedValue = parseFloat(wrap.querySelector("#correctedValue").value);
           const note = wrap.querySelector("#correctionNote").value;
