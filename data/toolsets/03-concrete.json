@@ -1,0 +1,44 @@
+{
+  "tools": [
+    {
+      "id": "conc-slab-on-grade",
+      "name": "Slab on Grade",
+      "csiDivision": "03",
+      "csiDivisionName": "Concrete",
+      "category": "Cast-in-Place Concrete",
+      "subcategory": "Slabs",
+      "description": "Traced plan area of a slab-on-grade pour. Volume is not computed by this tool — thickness input and CY conversion are not built yet (Section 8).",
+      "quantityType": "square_footage",
+      "unit": "SF",
+      "style": {
+        "strokeColor": "#8a8f98",
+        "fillColor": "#c9ccd1",
+        "opacity": 0.35,
+        "lineStyle": "solid",
+        "lineWeight": 2,
+        "hatchPattern": "concrete"
+      },
+      "defaultLabel": "Slab"
+    },
+    {
+      "id": "conc-footing-run",
+      "name": "Continuous Footing",
+      "csiDivision": "03",
+      "csiDivisionName": "Concrete",
+      "category": "Cast-in-Place Concrete",
+      "subcategory": "Foundations",
+      "description": "Traced centerline length of a continuous footing run. Width/depth-based CY volume is not computed by this tool.",
+      "quantityType": "linear_footage",
+      "unit": "LF",
+      "style": {
+        "strokeColor": "#5b6068",
+        "fillColor": null,
+        "opacity": 1,
+        "lineStyle": "dashed",
+        "lineWeight": 3,
+        "hatchPattern": null
+      },
+      "defaultLabel": "Footing"
+    }
+  ]
+}

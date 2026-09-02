@@ -1,0 +1,44 @@
+{
+  "tools": [
+    {
+      "id": "elec-conduit-run",
+      "name": "Conduit Run",
+      "csiDivision": "26",
+      "csiDivisionName": "Electrical",
+      "category": "Raceway and Boxes",
+      "subcategory": "Conduit",
+      "description": "Traced routed length of a conduit run. Bend/fitting deductions and stub-up allowances are not computed — length only.",
+      "quantityType": "linear_footage",
+      "unit": "LF",
+      "style": {
+        "strokeColor": "#c92a2a",
+        "fillColor": null,
+        "opacity": 1,
+        "lineStyle": "solid",
+        "lineWeight": 2,
+        "hatchPattern": null
+      },
+      "defaultLabel": "Conduit"
+    },
+    {
+      "id": "elec-panel-clearance-area",
+      "name": "Panel Working Clearance",
+      "csiDivision": "26",
+      "csiDivisionName": "Electrical",
+      "category": "Distribution Equipment",
+      "subcategory": "Panels",
+      "description": "Traced plan area marking a panel's required NEC working clearance zone, for documentation purposes only — not a code-compliance check.",
+      "quantityType": "square_footage",
+      "unit": "SF",
+      "style": {
+        "strokeColor": "#e8590c",
+        "fillColor": "#ffd8a8",
+        "opacity": 0.25,
+        "lineStyle": "dotted",
+        "lineWeight": 2,
+        "hatchPattern": null
+      },
+      "defaultLabel": "Panel Clearance"
+    }
+  ]
+}
