@@ -370,7 +370,7 @@ async function analyzeBatch(files) {
     if (budgetUsed + p.file.size > MAX_BATCH_ANALYSIS_BYTES) {
       skippedFiles.push({
         originalName: p.file.originalname,
-        reason: "Batch size limit reached — upload separately for analysis.",
+        reason: "File saved and ready for manual takeoff, but skipped for the AI summary — this batch is over the AI's read-size budget. Open it directly from your history to calibrate and trace it.",
       });
       continue;
     }
