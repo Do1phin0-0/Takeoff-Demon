@@ -1,0 +1,61 @@
+{
+  "tools": [
+    {
+      "id": "fin-flooring-area",
+      "name": "Flooring",
+      "csiDivision": "09",
+      "csiDivisionName": "Finishes",
+      "category": "Flooring",
+      "description": "Traced plan area of a flooring finish region (tile, VCT, carpet, etc. — material type is a label only, not a computed field).",
+      "quantityType": "square_footage",
+      "unit": "SF",
+      "style": {
+        "strokeColor": "#c07a2c",
+        "fillColor": "#f0c98c",
+        "opacity": 0.35,
+        "lineStyle": "solid",
+        "lineWeight": 2,
+        "hatchPattern": null
+      },
+      "defaultLabel": "Flooring"
+    },
+    {
+      "id": "fin-paint-wall-area",
+      "name": "Paint / Wall Finish",
+      "csiDivision": "09",
+      "csiDivisionName": "Finishes",
+      "category": "Painting and Coating",
+      "description": "Traced plan area used as a proxy for a wall-finish region. This tool does NOT convert plan area to wall surface area (no height input) — that conversion is not built.",
+      "quantityType": "square_footage",
+      "unit": "SF",
+      "style": {
+        "strokeColor": "#3f7fbf",
+        "fillColor": "#bcd9f5",
+        "opacity": 0.3,
+        "lineStyle": "solid",
+        "lineWeight": 2,
+        "hatchPattern": null
+      },
+      "defaultLabel": "Paint"
+    },
+    {
+      "id": "fin-base-run",
+      "name": "Base / Trim Run",
+      "csiDivision": "09",
+      "csiDivisionName": "Finishes",
+      "category": "Finish Carpentry",
+      "description": "Traced length of a base or trim run along a wall line.",
+      "quantityType": "linear_footage",
+      "unit": "LF",
+      "style": {
+        "strokeColor": "#7a5230",
+        "fillColor": null,
+        "opacity": 1,
+        "lineStyle": "solid",
+        "lineWeight": 2,
+        "hatchPattern": null
+      },
+      "defaultLabel": "Base"
+    }
+  ]
+}

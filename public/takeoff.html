@@ -11,6 +11,11 @@
     <link rel="stylesheet" href="/theme.css" />
     <style>
       body { max-width: 980px; }
+      .tool-division { margin: 0.6rem 0; }
+      .tool-division h4 { margin: 0 0 0.4rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+      .tool-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+      .tool-btn { display: inline-flex; align-items: center; gap: 0.4rem; }
+      .tool-swatch { width: 0.7rem; height: 0.7rem; border-radius: 2px; display: inline-block; flex: none; border: 1px solid rgba(0,0,0,0.25); }
     </style>
   </head>
   <body>
@@ -101,10 +106,14 @@
       <button class="secondary" id="resetTrace">Reset</button>
     </div>
 
-    <div class="controls" id="startTraceControls" style="display:none">
-      <span>Choose a tool:</span>
-      <button id="startArea">Trace area (sq ft)</button>
-      <button id="startLength">Measure length (linear ft)</button>
+    <div id="toolChestControls" style="display:none">
+      <p class="hint" style="margin-bottom:0.4rem">Choose a tool. Each tool tags the takeoff with a CSI division and applies its markup style — it does not change how the quantity is measured or computed.</p>
+      <div class="controls" id="toolChestGeneric">
+        <span>Generic (untagged):</span>
+        <button class="secondary" id="startArea">Trace area (sq ft)</button>
+        <button class="secondary" id="startLength">Measure length (linear ft)</button>
+      </div>
+      <div id="toolChestDivisions"></div>
     </div>
 
     <div class="controls" id="saveControls" style="display:none">
@@ -133,6 +142,8 @@
       let tracePoints = [];
       let closedPolygon = null;
       let activeQuantityType = null; // "square_footage" | "linear_footage"
+      let selectedTool = null; // registry tool object, or null for a generic/untagged trace
+      let toolDivisions = []; // from GET /api/tools, fetched once at load
       let pdfDoc = null;
       let currentPage = Math.max(1, parseInt(params.get("page"), 10) || 1);
       let totalPages = 1;
@@ -185,6 +196,50 @@
       } else {
         fileLabel.textContent = `File: ${fileName}`;
         loadSource(fileName);
+      }
+      loadToolChest();
+
+      async function loadToolChest() {
+        try {
+          const res = await fetch("/api/tools");
+          if (!res.ok) return;
+          const body = await res.json();
+          toolDivisions = body.divisions || [];
+          renderToolChest();
+        } catch {
+          // Tool chest is optional polish over the generic area/length tools —
+          // if it can't load, the generic buttons still work.
+        }
+      }
+
+      function renderToolChest() {
+        const container = document.getElementById("toolChestDivisions");
+        container.innerHTML = "";
+        for (const division of toolDivisions) {
+          const wrap = document.createElement("div");
+          wrap.className = "tool-division";
+          const heading = document.createElement("h4");
+          heading.textContent = `Division ${division.csiDivision} — ${division.csiDivisionName}`;
+          wrap.appendChild(heading);
+          const row = document.createElement("div");
+          row.className = "tool-row";
+          for (const tool of division.tools) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "secondary tool-btn";
+            btn.title = tool.description;
+            const swatch = document.createElement("span");
+            swatch.className = "tool-swatch";
+            swatch.style.background = tool.style.fillColor || tool.style.strokeColor;
+            swatch.style.borderColor = tool.style.strokeColor;
+            btn.appendChild(swatch);
+            btn.appendChild(document.createTextNode(`${tool.name} (${tool.unit})`));
+            btn.addEventListener("click", () => startTracing(tool.quantityType, tool));
+            row.appendChild(btn);
+          }
+          wrap.appendChild(row);
+          container.appendChild(wrap);
+        }
       }
 
       async function loadSource(name) {
@@ -254,12 +309,13 @@
           tracePoints = [];
           closedPolygon = null;
           activeQuantityType = null;
+          selectedTool = null;
           mode = "calibrating";
           document.querySelectorAll(".controls.correction-form").forEach((el) => el.remove());
           setResult("");
           document.getElementById("confirmCalibration").disabled = true;
           showCalibrationEntryPoints();
-          document.getElementById("startTraceControls").style.display = "none";
+          document.getElementById("toolChestControls").style.display = "none";
           document.getElementById("traceControls").style.display = "none";
           document.getElementById("saveControls").style.display = "none";
           document.getElementById("step2").textContent = "2. Measure";
@@ -347,22 +403,35 @@
         const pts = closedPolygon || tracePoints;
         if (pts.length > 0) {
           const isClosedArea = Boolean(closedPolygon) && activeQuantityType === "square_footage";
-          ctx.strokeStyle = "#16a34a";
-          ctx.lineWidth = 2;
+          const style = selectedTool ? selectedTool.style : null;
+          const strokeColor = style ? style.strokeColor : "#16a34a";
+          const dash = { dashed: [8, 5], dotted: [2, 4] }[style && style.lineStyle] || [];
+          ctx.save();
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = style ? style.lineWeight : 2;
+          ctx.setLineDash(dash);
           ctx.beginPath();
           pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-          if (isClosedArea) {
+          if (isClosedArea && style && style.fillColor) {
+            ctx.closePath();
+            ctx.globalAlpha = style.opacity;
+            ctx.fillStyle = style.fillColor;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          } else if (isClosedArea) {
             ctx.closePath();
             ctx.fillStyle = "rgba(22,163,74,0.25)";
             ctx.fill();
           }
           ctx.stroke();
-          ctx.fillStyle = "#16a34a";
+          ctx.setLineDash([]);
+          ctx.fillStyle = strokeColor;
           pts.forEach((p) => {
             ctx.beginPath();
             ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
             ctx.fill();
           });
+          ctx.restore();
         }
       }
 
@@ -443,7 +512,8 @@
             document.getElementById("finishTrace").disabled = tracePoints.length < minPoints;
             document.getElementById("undoPoint").disabled = tracePoints.length === 0;
           };
-          if (from) animateSegment(from, p, "#16a34a", commit);
+          const traceColor = selectedTool ? selectedTool.style.strokeColor : "#16a34a";
+          if (from) animateSegment(from, p, traceColor, commit);
           else commit();
         }
       }
@@ -541,7 +611,7 @@
         document.getElementById("calibrateControls").style.display = "none";
         document.getElementById("printedScaleControls").style.display = "none";
         document.getElementById("lastScaleControls").style.display = "none";
-        document.getElementById("startTraceControls").style.display = "flex";
+        document.getElementById("toolChestControls").style.display = "block";
         mode = "idle";
         setResult("");
         redraw();
@@ -588,8 +658,9 @@
         document.getElementById("lastScaleControls").style.display = "none";
       });
 
-      function startTracing(quantityType) {
+      function startTracing(quantityType, tool) {
         activeQuantityType = quantityType;
+        selectedTool = tool || null;
         mode = "tracing";
         tracePoints = [];
         closedPolygon = null;
@@ -600,15 +671,17 @@
         document.getElementById("finishTrace").textContent = isArea ? "Close shape" : "Finish line";
         document.getElementById("finishTrace").disabled = true;
         document.getElementById("undoPoint").disabled = true;
-        document.getElementById("step2").textContent = isArea ? "2. Trace boundary" : "2. Measure length";
+        document.getElementById("step2").textContent = selectedTool
+          ? `2. Trace: ${selectedTool.name}`
+          : isArea ? "2. Trace boundary" : "2. Measure length";
         document.getElementById("step2").classList.add("active");
-        document.getElementById("startTraceControls").style.display = "none";
+        document.getElementById("toolChestControls").style.display = "none";
         document.getElementById("traceControls").style.display = "flex";
         document.getElementById("saveControls").style.display = "none";
         redraw();
         updateHud();
       }
-      document.getElementById("startArea").addEventListener("click", () => startTracing("square_footage"));
+      document.getElementById("startArea").addEventListener("click", () => startTracing("square_footage", null));
       document.getElementById("startLength").addEventListener("click", () => startTracing("linear_footage"));
 
       document.getElementById("undoPoint").addEventListener("click", () => {
@@ -665,12 +738,13 @@
       function showQuantityPreview() {
         const feetPerUnit = calibration.unit === "in" ? 1 / 12 : 1;
         const feetPerPixel = (calibration.realDistance * feetPerUnit) / calibration.pixelDistance;
+        const toolLabel = selectedTool ? ` [${selectedTool.name}]` : "";
         if (activeQuantityType === "square_footage") {
           const areaSqFt = polygonAreaPixels(closedPolygon) * feetPerPixel * feetPerPixel;
-          document.getElementById("quantitySummary").textContent = `≈ ${areaSqFt.toFixed(1)} sq ft (server will recompute and score confidence)`;
+          document.getElementById("quantitySummary").textContent = `≈ ${areaSqFt.toFixed(1)} sq ft${toolLabel} (server will recompute and score confidence)`;
         } else {
           const lengthFt = polylineLengthPixels(closedPolygon) * feetPerPixel;
-          document.getElementById("quantitySummary").textContent = `≈ ${lengthFt.toFixed(1)} ft (server will recompute and score confidence)`;
+          document.getElementById("quantitySummary").textContent = `≈ ${lengthFt.toFixed(1)} ft${toolLabel} (server will recompute and score confidence)`;
         }
       }
 
@@ -688,6 +762,7 @@
           canvasWidth: canvas.width,
           canvasHeight: canvas.height,
           note: document.getElementById("note").value || null,
+          ...(selectedTool ? { toolId: selectedTool.id } : {}),
         };
         setResult("Saving…");
         try {
@@ -711,6 +786,7 @@
         const cls = record.confidence === "medium" ? "ok" : "warn";
         setResult(
           `Saved takeoff ${record.id}\n` +
+            (record.toolId ? `Tool: ${record.toolId}\n` : "") +
             `Value: ${record.value} ${record.unit}\n` +
             `Confidence: ${record.confidence}\n` +
             record.confidenceReasons.map((r) => `  - ${r}`).join("\n") +

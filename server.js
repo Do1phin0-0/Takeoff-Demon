@@ -23,10 +23,13 @@ const { buildCorrectionsReport } = require("./lib/report");
 const { createTraceSession } = require("./lib/trace");
 const { loadKnowledge, buildTrajectories, buildSystemPrompt } = require("./lib/icl");
 const { critiqueTakeoffSummary, critiqueContractPayload, critiqueTakeoffGeometry } = require("./lib/critic");
+const { createToolRegistry } = require("./lib/tools/registry");
+const { buildMarkupsSummary } = require("./lib/markups-summary");
 // Pure dependency-injected loop — safe in the server graph, unlike run-feedback.
 const { runWithReflexion } = require("./agent/reflexion");
 
 const SUPPORTED_QUANTITY_TYPES = ["square_footage", "linear_footage"];
+const toolRegistry = createToolRegistry(path.join(__dirname, "data", "toolsets"));
 // Absolute floor for a computed polygon area (px²) / polyline length (px) to
 // count as non-degenerate. This is a tolerance in canvas-pixel magnitude, not
 // a float-equality epsilon — Number.EPSILON (~2.22e-16) is scaled for values
@@ -707,13 +710,30 @@ function scoreConfidence({ scale, polygon, minPoints, isArea, measurePixels, can
 }
 
 app.post("/api/takeoffs", (req, res) => {
-  const { fileName, pageNumber, quantityType, scale, polygon: rawPolygon, markupImage, canvasWidth, canvasHeight, note } = req.body || {};
+  const { fileName, pageNumber, quantityType, scale, polygon: rawPolygon, markupImage, canvasWidth, canvasHeight, note, toolId } = req.body || {};
 
   if (!fileName || !safeStoredFilePath(UPLOAD_DIR, fileName) || !fs.existsSync(safeStoredFilePath(UPLOAD_DIR, fileName))) {
     return res.status(400).json({ error: "fileName must reference an uploaded file." });
   }
   if (!SUPPORTED_QUANTITY_TYPES.includes(quantityType)) {
     return res.status(400).json({ error: `quantityType must be one of: ${SUPPORTED_QUANTITY_TYPES.join(", ")}.` });
+  }
+  // toolId is optional — the takeoff UI does not yet offer a tool chest, so
+  // most saves will omit it. When present it must reference a real registry
+  // entry whose quantityType matches what's actually being saved.
+  let toolRecordField;
+  if (toolId !== undefined) {
+    if (typeof toolId !== "string") {
+      return res.status(400).json({ error: "toolId must be a string." });
+    }
+    const tool = toolRegistry.getTool(toolId);
+    if (!tool) {
+      return res.status(400).json({ error: `Unknown toolId "${toolId}".` });
+    }
+    if (tool.quantityType !== quantityType) {
+      return res.status(400).json({ error: `toolId "${toolId}" is a ${tool.quantityType} tool, not ${quantityType}.` });
+    }
+    toolRecordField = tool.id;
   }
   const isArea = quantityType === "square_footage";
   const minPoints = isArea ? 3 : 2;
@@ -801,6 +821,7 @@ app.post("/api/takeoffs", (req, res) => {
     canvasWidth: Number(canvasWidth) || 0,
     canvasHeight: Number(canvasHeight) || 0,
     note: noteField.value,
+    ...(toolRecordField !== undefined ? { toolId: toolRecordField } : {}),
   });
 
   res.status(201).json(record);
@@ -808,6 +829,20 @@ app.post("/api/takeoffs", (req, res) => {
 
 app.get("/api/takeoffs", (_req, res) => {
   res.json({ takeoffs: takeoffsStore.readAll() });
+});
+
+// Tool Registry — read-only. Not yet wired into takeoff.html's UI (no tool
+// chest panel exists there); this exposes the registry so that panel, and
+// external tooling, have something real to read from CSI-division grouping
+// straight through to render-ready style attributes.
+app.get("/api/tools", (_req, res) => {
+  res.json({ divisions: toolRegistry.listDivisions(), loadErrors: toolRegistry.loadErrors });
+});
+
+// Markups List summary — read-only rollup of saved takeoffs grouped by tool/
+// category/CSI division (Revu "Markups List" equivalent, minus pricing).
+app.get("/api/markups-summary", (_req, res) => {
+  res.json(buildMarkupsSummary(takeoffsStore.readAll(), toolRegistry));
 });
 
 app.get("/api/takeoffs/:id", (req, res) => {
