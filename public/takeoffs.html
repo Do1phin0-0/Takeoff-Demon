@@ -79,7 +79,12 @@
 
         card.appendChild(el("div", "meta",
           `${t.fileName} · page ${t.pageNumber || 1} · ${new Date(t.createdAt).toLocaleString()}` +
-          ` · scale: ${t.scale.realDistance} ${t.scale.unit} = ${Math.round(t.scale.pixelDistance)}px`));
+          (t.scale
+            ? ` · scale: ${t.scale.realDistance} ${t.scale.unit} = ${Math.round(t.scale.pixelDistance)}px`
+            : " · no scale (count)") +
+          (t.quantityType === "count" && t.matchedCount
+            ? ` · ${t.manualCount} placed by hand, ${t.matchedCount} from template matching`
+            : "")));
 
         const conf = el("div");
         conf.appendChild(el("span", `confidence-${t.confidence}`, `Confidence: ${t.confidence}`));

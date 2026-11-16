@@ -1,0 +1,24 @@
+{
+  "tools": [
+    {
+      "id": "door-single-swing",
+      "name": "Door — Single Swing",
+      "csiDivision": "08",
+      "csiDivisionName": "Openings",
+      "category": "Doors and Frames",
+      "subcategory": "Swing Doors",
+      "description": "One marker per single-swing door leaf. Count only — door type, size, rating and hardware set are not read from the door schedule.",
+      "quantityType": "count",
+      "unit": "EA",
+      "style": {
+        "strokeColor": "#7048e8",
+        "fillColor": null,
+        "opacity": 1,
+        "lineStyle": "solid",
+        "lineWeight": 2,
+        "hatchPattern": null
+      },
+      "defaultLabel": "Door"
+    }
+  ]
+}

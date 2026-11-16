@@ -28,7 +28,10 @@ const { buildMarkupsSummary } = require("./lib/markups-summary");
 // Pure dependency-injected loop — safe in the server graph, unlike run-feedback.
 const { runWithReflexion } = require("./agent/reflexion");
 
-const SUPPORTED_QUANTITY_TYPES = ["square_footage", "linear_footage"];
+const SUPPORTED_QUANTITY_TYPES = ["square_footage", "linear_footage", "count"];
+// A count is one marker per item; anything past this is a runaway template
+// match, not a takeoff.
+const MAX_COUNT_MARKERS = 5000;
 const toolRegistry = createToolRegistry(path.join(__dirname, "data", "toolsets"));
 // Absolute floor for a computed polygon area (px²) / polyline length (px) to
 // count as non-degenerate. This is a tolerance in canvas-pixel magnitude, not
@@ -709,6 +712,108 @@ function scoreConfidence({ scale, polygon, minPoints, isArea, measurePixels, can
   return { level: "medium", reasons };
 }
 
+// Writes the markup proof PNG. Returns the stored file name, or null after
+// having already sent the 507 response.
+function writeMarkupProof(res, markupBuffer) {
+  const markupFileName = `${Date.now()}-${crypto.randomUUID()}.png`;
+  try {
+    fs.writeFileSync(path.join(MARKUP_DIR, markupFileName), markupBuffer);
+    return markupFileName;
+  } catch (err) {
+    console.error("Failed to write markup proof:", err.message);
+    const diskFull = err.code === "ENOSPC";
+    res.status(507).json({
+      error: diskFull
+        ? "Server disk is full — could not save the markup proof. This takeoff was not recorded."
+        : "Could not save the markup proof — this takeoff was not recorded.",
+    });
+    return null;
+  }
+}
+
+// Count takeoff: one marker per item. The quantity is the number of distinct
+// markers, recomputed here from the points — never read from the client. No
+// scale is needed to count, so scale is optional (validated only if sent).
+// Each marker carries its source: "manual" (a human clicked it) or "matched"
+// (proposed by the client's template matching and kept). The server cannot
+// verify a kept proposal was individually checked, so any matched marker
+// caps confidence at "low" until a human approves it on the review page.
+function saveCountTakeoff(req, res, { page, toolRecordField }) {
+  const { fileName, scale, polygon: rawPoints, markupImage, canvasWidth, canvasHeight, note } = req.body || {};
+
+  const hasScale = scale !== undefined && scale !== null;
+  if (hasScale && (typeof scale.pixelDistance !== "number" || scale.pixelDistance <= 0 || typeof scale.realDistance !== "number" || scale.realDistance <= 0)) {
+    return res.status(400).json({ error: "scale.pixelDistance and scale.realDistance must be positive numbers when a scale is sent." });
+  }
+  if (!Array.isArray(rawPoints) || rawPoints.length < 1 || !rawPoints.every((p) => p && typeof p.x === "number" && typeof p.y === "number")) {
+    return res.status(400).json({ error: "polygon must be an array of at least 1 {x,y} marker for a count." });
+  }
+  if (rawPoints.length > MAX_COUNT_MARKERS) {
+    return res.status(400).json({ error: `A count is limited to ${MAX_COUNT_MARKERS} markers.` });
+  }
+  if (!rawPoints.every((p) => p.source === undefined || p.source === "manual" || p.source === "matched")) {
+    return res.status(400).json({ error: 'marker source must be "manual" or "matched".' });
+  }
+  // Two markers on the exact same pixel are one item clicked twice, not two.
+  const seen = new Set();
+  const markers = [];
+  for (const p of rawPoints) {
+    const key = `${p.x},${p.y}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    markers.push({ x: p.x, y: p.y, source: p.source === "matched" ? "matched" : "manual" });
+  }
+  const geometryCritique = critiqueTakeoffGeometry({ polygon: markers, scale: hasScale ? scale : null, canvasWidth, canvasHeight });
+  if (!geometryCritique.ok) {
+    return res.status(400).json({ error: geometryCritique.issues.map((i) => i.message).join(" ") });
+  }
+  const markupBuffer = decodeDataUrlPng(markupImage);
+  if (!markupBuffer) {
+    return res.status(400).json({ error: "markupImage must be a PNG data URL (visual proof is required)." });
+  }
+  const noteField = validateFreeText(note, "note", 1000);
+  if (noteField.error) return res.status(400).json({ error: noteField.error });
+
+  const matchedCount = markers.filter((m) => m.source === "matched").length;
+  const manualCount = markers.length - matchedCount;
+  const confidence = matchedCount > 0
+    ? {
+        level: "low",
+        reasons: [
+          `${matchedCount} of ${markers.length} markers were proposed by template matching and kept; the system cannot verify each one was individually checked. Template matching misses symbols drawn at another size or angle and can hit look-alike linework — recount against the numbered markup before approving.`,
+        ],
+      }
+    : {
+        level: "medium",
+        reasons: [
+          "Every marker was placed by a human against the source sheet; no independent cross-check (e.g. a schedule count) exists yet, so this cannot be scored 'high'.",
+        ],
+      };
+
+  const markupFileName = writeMarkupProof(res, markupBuffer);
+  if (!markupFileName) return;
+
+  const record = takeoffsStore.append({
+    fileName,
+    pageNumber: page,
+    quantityType: "count",
+    value: markers.length,
+    unit: "EA",
+    scale: hasScale ? scale : null,
+    polygon: markers,
+    manualCount,
+    matchedCount,
+    confidence: confidence.level,
+    confidenceReasons: confidence.reasons,
+    markupFileName,
+    canvasWidth: Number(canvasWidth) || 0,
+    canvasHeight: Number(canvasHeight) || 0,
+    note: noteField.value,
+    ...(toolRecordField !== undefined ? { toolId: toolRecordField } : {}),
+  });
+  res.status(201).json(record);
+}
+
 app.post("/api/takeoffs", (req, res) => {
   const { fileName, pageNumber, quantityType, scale, polygon: rawPolygon, markupImage, canvasWidth, canvasHeight, note, toolId } = req.body || {};
 
@@ -740,6 +845,9 @@ app.post("/api/takeoffs", (req, res) => {
   const page = pageNumber === undefined ? 1 : Number(pageNumber);
   if (!Number.isInteger(page) || page < 1) {
     return res.status(400).json({ error: "pageNumber must be a positive integer." });
+  }
+  if (quantityType === "count") {
+    return saveCountTakeoff(req, res, { page, toolRecordField });
   }
   if (!scale || typeof scale.pixelDistance !== "number" || scale.pixelDistance <= 0 || typeof scale.realDistance !== "number" || scale.realDistance <= 0) {
     return res.status(400).json({ error: "scale.pixelDistance and scale.realDistance must be positive numbers." });
@@ -792,18 +900,8 @@ app.post("/api/takeoffs", (req, res) => {
     canvasHeight: Number(canvasHeight) || 0,
   });
 
-  const markupFileName = `${Date.now()}-${crypto.randomUUID()}.png`;
-  try {
-    fs.writeFileSync(path.join(MARKUP_DIR, markupFileName), markupBuffer);
-  } catch (err) {
-    console.error("Failed to write markup proof:", err.message);
-    const diskFull = err.code === "ENOSPC";
-    return res.status(507).json({
-      error: diskFull
-        ? "Server disk is full — could not save the markup proof. This takeoff was not recorded."
-        : "Could not save the markup proof — this takeoff was not recorded.",
-    });
-  }
+  const markupFileName = writeMarkupProof(res, markupBuffer);
+  if (!markupFileName) return;
 
   const record = takeoffsStore.append({
     fileName,

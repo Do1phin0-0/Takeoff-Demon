@@ -39,7 +39,7 @@ test("validateToolDefinition accepts a well-formed tool", () => {
 });
 
 test("validateToolDefinition rejects an unsupported quantityType", () => {
-  const { ok, issues } = validateToolDefinition({ ...VALID_TOOL, quantityType: "count" });
+  const { ok, issues } = validateToolDefinition({ ...VALID_TOOL, quantityType: "volume" });
   assert.equal(ok, false);
   assert.ok(issues.some((i) => i.includes("quantityType")));
 });

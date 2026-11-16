@@ -56,6 +56,7 @@
         <div><span class="label">STATUS:</span> <span id="hudStatus">READY</span></div>
         <div><span class="label">LENGTH:</span> <span id="hudLength">—</span></div>
         <div><span class="label">AREA:</span> <span id="hudArea">—</span></div>
+        <div><span class="label">COUNT:</span> <span id="hudCount">—</span></div>
         <div><span class="label">HEADING:</span> <span id="hudHeading">—</span></div>
         <div><span class="label">CORNER:</span> <span id="hudCorner">—</span></div>
       </div>
@@ -97,6 +98,7 @@
       </select>
       <button id="confirmCalibration" disabled>Confirm calibration</button>
       <button class="secondary" id="resetCalibration">Reset</button>
+      <button class="secondary" id="skipCalibration" title="Counting items does not need a scale. Area and length tools stay locked until you calibrate.">Skip — count only</button>
     </div>
 
     <div class="controls" id="traceControls" style="display:none">
@@ -104,6 +106,12 @@
       <button id="finishTrace" disabled>Close shape</button>
       <button class="secondary" id="undoPoint" disabled>Undo point</button>
       <button class="secondary" id="resetTrace">Reset</button>
+      <span id="countControls" style="display:none">
+        <button class="secondary" id="findSimilar" title="Drag a box around one symbol; the sheet is scanned for look-alikes and each hit is added as a proposed marker for you to check.">Find similar…</button>
+        <label class="hint" style="margin:0">match strictness
+          <input type="number" id="matchThreshold" name="matchThreshold" aria-label="Template match strictness, 0.5 loose to 0.95 strict" min="0.5" max="0.95" step="0.05" value="0.7" style="width:4.5rem" />
+        </label>
+      </span>
     </div>
 
     <div id="toolChestControls" style="display:none">
@@ -112,6 +120,7 @@
         <span>Generic (untagged):</span>
         <button class="secondary" id="startArea">Trace area (sq ft)</button>
         <button class="secondary" id="startLength">Measure length (linear ft)</button>
+        <button class="secondary" id="startCount">Count items (EA)</button>
       </div>
       <div id="toolChestDivisions"></div>
     </div>
@@ -127,6 +136,7 @@
     <script type="module">
       import * as pdfjsLib from "/vendor/pdfjs/pdf.min.mjs";
       import { processPath, getCardinalDirection, calculateCornerAngle } from "/lib/trace.js";
+      import { findSimilar } from "/lib/template-match.js";
 
       const params = new URLSearchParams(location.search);
       const fileName = params.get("file");
@@ -141,7 +151,15 @@
       let calibration = null; // {pixelDistance, realDistance, unit}
       let tracePoints = [];
       let closedPolygon = null;
-      let activeQuantityType = null; // "square_footage" | "linear_footage"
+      let activeQuantityType = null; // "square_footage" | "linear_footage" | "count"
+      // Count tool: tracePoints holds markers {x, y, source: "manual"|"matched", box?}.
+      let pickingTemplate = false; // true while the user drags a box for "Find similar"
+      let dragStart = null;
+      let dragCurrent = null;
+      let suppressNextClick = false;
+      const MATCHED_COLOR = "#f59f00"; // amber = proposed by template matching, not placed by hand
+      const minPointsFor = (qt) => (qt === "count" ? 1 : qt === "linear_footage" ? 2 : 3);
+      const markerRadius = () => Math.max(9, Math.round(canvas.width / 260));
       let selectedTool = null; // registry tool object, or null for a generic/untagged trace
       let toolDivisions = []; // from GET /api/tools, fetched once at load
       let pdfDoc = null;
@@ -234,6 +252,7 @@
             swatch.style.borderColor = tool.style.strokeColor;
             btn.appendChild(swatch);
             btn.appendChild(document.createTextNode(`${tool.name} (${tool.unit})`));
+            btn.dataset.qt = tool.quantityType;
             btn.addEventListener("click", () => startTracing(tool.quantityType, tool));
             row.appendChild(btn);
           }
@@ -310,6 +329,8 @@
           closedPolygon = null;
           activeQuantityType = null;
           selectedTool = null;
+          pickingTemplate = false;
+          dragStart = dragCurrent = null;
           mode = "calibrating";
           document.querySelectorAll(".controls.correction-form").forEach((el) => el.remove());
           setResult("");
@@ -355,6 +376,9 @@
         document.getElementById("step1").classList.add("active");
         mode = "calibrating";
         canvas.addEventListener("click", onCanvasClick);
+        canvas.addEventListener("mousedown", onCanvasMouseDown);
+        canvas.addEventListener("mousemove", onCanvasMouseMove);
+        canvas.addEventListener("mouseup", onCanvasMouseUp);
         document.getElementById("hud").style.display = "block";
         updateHud();
       }
@@ -401,7 +425,20 @@
         }
 
         const pts = closedPolygon || tracePoints;
-        if (pts.length > 0) {
+        if (activeQuantityType === "count") {
+          drawMarkers(pts);
+          if (pickingTemplate && dragStart && dragCurrent) {
+            ctx.save();
+            ctx.strokeStyle = "#2563eb";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.strokeRect(
+              Math.min(dragStart.x, dragCurrent.x), Math.min(dragStart.y, dragCurrent.y),
+              Math.abs(dragCurrent.x - dragStart.x), Math.abs(dragCurrent.y - dragStart.y)
+            );
+            ctx.restore();
+          }
+        } else if (pts.length > 0) {
           const isClosedArea = Boolean(closedPolygon) && activeQuantityType === "square_footage";
           const style = selectedTool ? selectedTool.style : null;
           const strokeColor = style ? style.strokeColor : "#16a34a";
@@ -433,6 +470,115 @@
           });
           ctx.restore();
         }
+      }
+
+      // Count markers: a numbered hollow ring per item so the symbol underneath
+      // stays visible and a reviewer can recount 1..N off the markup. Tool color
+      // = placed by hand; amber with a dashed box = proposed by template
+      // matching and kept (Section 11: measured vs inferred must look different).
+      function drawMarkers(markers) {
+        const r = markerRadius();
+        const manualColor = selectedTool ? selectedTool.style.strokeColor : "#16a34a";
+        ctx.save();
+        ctx.font = `bold ${Math.round(r * 1.3)}px sans-serif`;
+        ctx.textBaseline = "middle";
+        markers.forEach((m, i) => {
+          const color = m.source === "matched" ? MATCHED_COLOR : manualColor;
+          if (m.source === "matched" && m.box) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.strokeRect(m.box.x, m.box.y, m.box.w, m.box.h);
+            ctx.setLineDash([]);
+          }
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(m.x, m.y, r, 0, Math.PI * 2);
+          ctx.stroke();
+          const label = String(i + 1);
+          const lx = m.x + r + 3;
+          const ly = m.y - r;
+          ctx.lineWidth = 4;
+          ctx.strokeStyle = "#ffffff";
+          ctx.strokeText(label, lx, ly);
+          ctx.fillStyle = color;
+          ctx.fillText(label, lx, ly);
+        });
+        ctx.restore();
+      }
+
+      function refreshCountButtons() {
+        document.getElementById("finishTrace").disabled = tracePoints.length < 1;
+        document.getElementById("undoPoint").disabled = tracePoints.length === 0;
+      }
+
+      function onCanvasMouseDown(evt) {
+        if (!pickingTemplate || evt.button !== 0) return;
+        dragStart = canvasPoint(evt);
+        dragCurrent = dragStart;
+      }
+      function onCanvasMouseMove(evt) {
+        if (!pickingTemplate || !dragStart) return;
+        dragCurrent = canvasPoint(evt);
+        redraw();
+      }
+      function onCanvasMouseUp(evt) {
+        if (!pickingTemplate || !dragStart) return;
+        const end = canvasPoint(evt);
+        const box = {
+          x: Math.min(dragStart.x, end.x),
+          y: Math.min(dragStart.y, end.y),
+          w: Math.abs(end.x - dragStart.x),
+          h: Math.abs(end.y - dragStart.y),
+        };
+        dragStart = dragCurrent = null;
+        pickingTemplate = false;
+        suppressNextClick = true; // the click that ends this drag must not drop a marker
+        setTimeout(() => (suppressNextClick = false), 0);
+        canvas.style.cursor = "";
+        redraw();
+        updateHud();
+        runFindSimilar(box);
+      }
+
+      // Scans the rendered sheet for look-alikes of the boxed symbol and adds
+      // each hit as a PROPOSED marker (source "matched"). Nothing is saved here —
+      // the user removes false hits / adds misses, and the server scores any
+      // count that kept a matched marker as low confidence.
+      function runFindSimilar(box) {
+        const threshold = Math.min(0.95, Math.max(0.5, parseFloat(document.getElementById("matchThreshold").value) || 0.7));
+        setResult("Scanning the sheet for look-alikes…");
+        setTimeout(() => {
+          let result;
+          try {
+            result = findSimilar({ rgba: sourceImage.data, width: canvas.width, height: canvas.height, box, threshold });
+          } catch (e) {
+            fail(e.message);
+            return;
+          }
+          if (result.truncated) {
+            fail(`More than ${result.matches.length} look-alikes at strictness ${threshold} — that is noise, not a count. Raise the strictness or box a more distinctive symbol. No markers were added.`);
+            return;
+          }
+          let added = 0;
+          for (const m of result.matches) {
+            const reach = Math.max(m.w, m.h) / 2;
+            if (tracePoints.some((p) => dist(p, { x: m.cx, y: m.cy }) < reach)) continue;
+            tracePoints.push({ x: m.cx, y: m.cy, source: "matched", box: { x: m.x, y: m.y, w: m.w, h: m.h } });
+            added++;
+          }
+          refreshCountButtons();
+          redraw();
+          updateHud();
+          setResult(
+            `Template matching proposed ${added} marker${added === 1 ? "" : "s"} (amber, dashed box).\n` +
+              `These are proposals, not a verified count: matching only finds the symbol at the same size in the 8 square orientations, ` +
+              `so it misses other sizes/angles and can hit look-alike linework.\n` +
+              `Click a wrong marker to remove it. Click a missed symbol to add it.`,
+            "warn"
+          );
+        }, 30);
       }
 
       function midpoint(a, b) {
@@ -487,7 +633,18 @@
       }
 
       function onCanvasClick(evt) {
+        if (suppressNextClick || pickingTemplate) return;
         const p = canvasPoint(evt);
+        if (mode === "tracing" && activeQuantityType === "count") {
+          // Click an existing marker to remove it; click anywhere else to add one.
+          const hit = tracePoints.findIndex((m) => dist(m, p) <= markerRadius() * 1.2);
+          if (hit >= 0) tracePoints.splice(hit, 1);
+          else tracePoints.push({ x: p.x, y: p.y, source: "manual" });
+          refreshCountButtons();
+          redraw();
+          updateHud();
+          return;
+        }
         if (mode === "calibrating") {
           if (calibrationPoints.length >= 2) calibrationPoints = [];
           const from = calibrationPoints[calibrationPoints.length - 1];
@@ -508,7 +665,7 @@
             tracePoints.push(p);
             redraw();
             updateHud();
-            const minPoints = activeQuantityType === "linear_footage" ? 2 : 3;
+            const minPoints = minPointsFor(activeQuantityType);
             document.getElementById("finishTrace").disabled = tracePoints.length < minPoints;
             document.getElementById("undoPoint").disabled = tracePoints.length === 0;
           };
@@ -532,6 +689,17 @@
         const cornerEl = document.getElementById("hudCorner");
         headingEl.textContent = "—";
         cornerEl.textContent = "—";
+        const countEl = document.getElementById("hudCount");
+        countEl.textContent = "—";
+        if (activeQuantityType === "count" && (mode === "tracing" || closedPolygon)) {
+          const markers = closedPolygon || tracePoints;
+          const matched = markers.filter((m) => m.source === "matched").length;
+          statusEl.textContent = closedPolygon ? "COUNT COMPLETE" : pickingTemplate ? "DRAG A BOX AROUND ONE SYMBOL" : "COUNTING";
+          countEl.textContent = matched ? `${markers.length} (${matched} matched)` : String(markers.length);
+          lengthEl.textContent = "—";
+          areaEl.textContent = "—";
+          return;
+        }
 
         if (mode === "calibrating") {
           if (calibrationPoints.length === 0) statusEl.textContent = "AWAITING SCALE REFERENCE";
@@ -541,7 +709,7 @@
             calibrationPoints.length === 2 ? `${dist(calibrationPoints[0], calibrationPoints[1]).toFixed(0)} px` : "—";
           areaEl.textContent = "—";
         } else if (mode === "tracing") {
-          const minPoints = activeQuantityType === "linear_footage" ? 2 : 3;
+          const minPoints = minPointsFor(activeQuantityType);
           statusEl.textContent = tracePoints.length < minPoints ? `TRACING — NEED ${minPoints}+ POINTS` : "TRACING";
           const fpp = feetPerPixel();
           if (fpp && tracePoints.length > 0) {
@@ -582,8 +750,8 @@
             lengthEl.textContent = "—";
             areaEl.textContent = "—";
           }
-        } else if (calibration) {
-          statusEl.textContent = "SCALE SET — READY TO TRACE";
+        } else if (calibration || mode === "idle") {
+          statusEl.textContent = calibration ? "SCALE SET — READY TO TRACE" : "NO SCALE — COUNT ONLY";
           lengthEl.textContent = "—";
           areaEl.textContent = "—";
         } else {
@@ -605,7 +773,7 @@
       // advances the UI from "calibrate" to "ready to trace."
       function applyCalibration(cal) {
         calibration = cal;
-        lastConfirmedScale = cal;
+        if (cal) lastConfirmedScale = cal;
         document.getElementById("step1").classList.remove("active");
         document.getElementById("step1").classList.add("done");
         document.getElementById("calibrateControls").style.display = "none";
@@ -614,9 +782,26 @@
         document.getElementById("toolChestControls").style.display = "block";
         mode = "idle";
         setResult("");
+        refreshToolAvailability();
         redraw();
         updateHud();
       }
+
+      // Area and length need a scale; counting does not. Without a calibration
+      // only count tools are usable.
+      function refreshToolAvailability() {
+        document.getElementById("startArea").disabled = !calibration;
+        document.getElementById("startLength").disabled = !calibration;
+        document.querySelectorAll("#toolChestDivisions .tool-btn").forEach((btn) => {
+          btn.disabled = !calibration && btn.dataset.qt !== "count";
+        });
+      }
+
+      document.getElementById("skipCalibration").addEventListener("click", () => {
+        calibrationPoints = [];
+        applyCalibration(null);
+        setResult("No scale set — count tools only. Change pages or reload to calibrate for area/length.", "warn");
+      });
 
       document.getElementById("confirmCalibration").addEventListener("click", () => {
         const raw = document.getElementById("realDistance").value;
@@ -665,15 +850,20 @@
         tracePoints = [];
         closedPolygon = null;
         const isArea = quantityType === "square_footage";
-        document.getElementById("traceHint").textContent = isArea
+        const isCount = quantityType === "count";
+        pickingTemplate = false;
+        document.getElementById("countControls").style.display = isCount ? "contents" : "none";
+        document.getElementById("traceHint").textContent = isCount
+          ? "Click each item to drop a numbered marker (click a marker again to remove it). Or let \"Find similar\" propose markers from one boxed symbol — then check every one."
+          : isArea
           ? "Click points around the room boundary, then close the shape."
           : "Click points along the length to measure, then finish the line.";
-        document.getElementById("finishTrace").textContent = isArea ? "Close shape" : "Finish line";
+        document.getElementById("finishTrace").textContent = isCount ? "Done counting" : isArea ? "Close shape" : "Finish line";
         document.getElementById("finishTrace").disabled = true;
         document.getElementById("undoPoint").disabled = true;
         document.getElementById("step2").textContent = selectedTool
-          ? `2. Trace: ${selectedTool.name}`
-          : isArea ? "2. Trace boundary" : "2. Measure length";
+          ? `2. ${isCount ? "Count" : "Trace"}: ${selectedTool.name}`
+          : isCount ? "2. Count items" : isArea ? "2. Trace boundary" : "2. Measure length";
         document.getElementById("step2").classList.add("active");
         document.getElementById("toolChestControls").style.display = "none";
         document.getElementById("traceControls").style.display = "flex";
@@ -683,11 +873,19 @@
       }
       document.getElementById("startArea").addEventListener("click", () => startTracing("square_footage", null));
       document.getElementById("startLength").addEventListener("click", () => startTracing("linear_footage"));
+      document.getElementById("startCount").addEventListener("click", () => startTracing("count", null));
+      document.getElementById("findSimilar").addEventListener("click", () => {
+        if (mode !== "tracing" || activeQuantityType !== "count") return;
+        pickingTemplate = true;
+        canvas.style.cursor = "crosshair";
+        setResult("Drag a box tightly around ONE whole symbol.");
+        updateHud();
+      });
 
       document.getElementById("undoPoint").addEventListener("click", () => {
         if (closedPolygon || tracePoints.length === 0) return;
         tracePoints.pop();
-        const minPoints = activeQuantityType === "linear_footage" ? 2 : 3;
+        const minPoints = minPointsFor(activeQuantityType);
         document.getElementById("finishTrace").disabled = tracePoints.length < minPoints;
         document.getElementById("undoPoint").disabled = tracePoints.length === 0;
         redraw();
@@ -705,7 +903,7 @@
       });
 
       document.getElementById("finishTrace").addEventListener("click", () => {
-        const minPoints = activeQuantityType === "linear_footage" ? 2 : 3;
+        const minPoints = minPointsFor(activeQuantityType);
         if (tracePoints.length < minPoints) return;
         closedPolygon = tracePoints.slice();
         mode = "idle";
@@ -736,6 +934,14 @@
       }
 
       function showQuantityPreview() {
+        if (activeQuantityType === "count") {
+          const matched = closedPolygon.filter((m) => m.source === "matched").length;
+          document.getElementById("quantitySummary").textContent =
+            `${closedPolygon.length} EA${selectedTool ? ` [${selectedTool.name}]` : ""}` +
+            (matched ? ` — ${matched} from template matching, will save as low confidence until reviewed` : "") +
+            " (server will recount the markers)";
+          return;
+        }
         const feetPerUnit = calibration.unit === "in" ? 1 / 12 : 1;
         const feetPerPixel = (calibration.realDistance * feetPerUnit) / calibration.pixelDistance;
         const toolLabel = selectedTool ? ` [${selectedTool.name}]` : "";
@@ -749,7 +955,8 @@
       }
 
       document.getElementById("saveTakeoff").addEventListener("click", async () => {
-        if (!calibration || !closedPolygon) return;
+        const isCount = activeQuantityType === "count";
+        if (!closedPolygon || (!calibration && !isCount)) return;
         redraw();
         const markupImage = canvas.toDataURL("image/png");
         const payload = {
@@ -757,7 +964,7 @@
           pageNumber: currentPage,
           quantityType: activeQuantityType,
           scale: calibration,
-          polygon: closedPolygon,
+          polygon: isCount ? closedPolygon.map((m) => ({ x: m.x, y: m.y, source: m.source })) : closedPolygon,
           markupImage,
           canvasWidth: canvas.width,
           canvasHeight: canvas.height,

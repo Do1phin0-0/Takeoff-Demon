@@ -310,3 +310,88 @@ test("GET /api/reports/corrections aggregates corrections and reviews across tak
   assert.ok(res.body.byQuantityType.square_footage.count >= 1);
   assert.equal(res.body.recentCorrections[0].fileName, fileName); // most recent correction, newest-first
 });
+
+// ---- Count takeoffs ----
+
+async function saveCount(fileName, markers, overrides = {}) {
+  return saveTakeoff(fileName, { quantityType: "count", scale: undefined, polygon: markers, ...overrides });
+}
+
+test("POST /api/takeoffs count: value is the number of markers, no scale required", async () => {
+  const fileName = await uploadOneFile();
+  const res = await saveCount(fileName, [{ x: 10, y: 10 }, { x: 50, y: 60 }, { x: 300, y: 400 }]);
+  assert.equal(res.status, 201);
+  assert.equal(res.body.quantityType, "count");
+  assert.equal(res.body.value, 3);
+  assert.equal(res.body.unit, "EA");
+  assert.equal(res.body.scale, null);
+  assert.equal(res.body.manualCount, 3);
+  assert.equal(res.body.matchedCount, 0);
+  assert.equal(res.body.confidence, "medium");
+});
+
+test("POST /api/takeoffs count: any template-matched marker caps confidence at low and is recorded", async () => {
+  const fileName = await uploadOneFile();
+  const res = await saveCount(fileName, [
+    { x: 10, y: 10, source: "manual" },
+    { x: 50, y: 60, source: "matched" },
+    { x: 90, y: 60, source: "matched" },
+  ]);
+  assert.equal(res.status, 201);
+  assert.equal(res.body.value, 3);
+  assert.equal(res.body.matchedCount, 2);
+  assert.equal(res.body.manualCount, 1);
+  assert.equal(res.body.confidence, "low");
+  assert.match(res.body.confidenceReasons[0], /2 of 3 markers were proposed by template matching/);
+  assert.deepEqual(res.body.polygon.map((m) => m.source), ["manual", "matched", "matched"]);
+});
+
+test("POST /api/takeoffs count: a client-supplied value is ignored and same-pixel markers count once", async () => {
+  const fileName = await uploadOneFile();
+  const res = await saveCount(fileName, [{ x: 10, y: 10 }, { x: 10, y: 10 }, { x: 20, y: 20 }], { value: 99 });
+  assert.equal(res.status, 201);
+  assert.equal(res.body.value, 2);
+});
+
+test("POST /api/takeoffs count: rejects empty, off-sheet, non-finite and bad-source markers", async () => {
+  const fileName = await uploadOneFile();
+  assert.equal((await saveCount(fileName, [])).status, 400);
+  assert.equal((await saveCount(fileName, [{ x: 5000, y: 10 }])).status, 400);
+  assert.equal((await saveCount(fileName, [{ x: "1", y: 10 }])).status, 400);
+  assert.equal((await saveCount(fileName, [{ x: 1, y: 10, source: "ai" }])).status, 400);
+  assert.equal((await saveCount(fileName, [{ x: 1, y: 10 }], { markupImage: "nope" })).status, 400);
+});
+
+test("POST /api/takeoffs count: a scale is optional but validated when sent", async () => {
+  const fileName = await uploadOneFile();
+  const ok = await saveCount(fileName, [{ x: 1, y: 1 }], { scale: { pixelDistance: 100, realDistance: 10, unit: "ft" } });
+  assert.equal(ok.status, 201);
+  assert.equal(ok.body.scale.pixelDistance, 100);
+  const bad = await saveCount(fileName, [{ x: 1, y: 1 }], { scale: { pixelDistance: -1, realDistance: 10, unit: "ft" } });
+  assert.equal(bad.status, 400);
+});
+
+test("POST /api/takeoffs count: toolId must be a count tool, and area/length still require a scale", async () => {
+  const fileName = await uploadOneFile();
+  const door = await saveCount(fileName, [{ x: 1, y: 1 }, { x: 9, y: 9 }], { toolId: "door-single-swing" });
+  assert.equal(door.status, 201);
+  assert.equal(door.body.toolId, "door-single-swing");
+  const wrong = await saveCount(fileName, [{ x: 1, y: 1 }], { toolId: "elec-conduit-run" });
+  assert.equal(wrong.status, 400);
+  const noScale = await saveTakeoff(fileName, { scale: undefined });
+  assert.equal(noScale.status, 400);
+
+  const summary = await request(app).get("/api/markups-summary");
+  const openings = summary.body.divisions.find((d) => d.csiDivision === "08");
+  const doors = openings.groups.find((g) => g.key === "door-single-swing");
+  assert.equal(doors.totals.EA, 2);
+});
+
+test("count takeoffs can be corrected through the existing corrections log", async () => {
+  const fileName = await uploadOneFile();
+  const saved = await saveCount(fileName, [{ x: 1, y: 1 }, { x: 9, y: 9 }]);
+  const res = await request(app).post(`/api/takeoffs/${saved.body.id}/corrections`).send({ correctedValue: 3, note: "missed one behind a column" });
+  assert.equal(res.status, 201);
+  assert.equal(res.body.originalValue, 2);
+  assert.equal(res.body.quantityType, "count");
+});

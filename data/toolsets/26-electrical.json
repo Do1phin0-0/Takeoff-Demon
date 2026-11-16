@@ -39,6 +39,46 @@
         "hatchPattern": null
       },
       "defaultLabel": "Panel Clearance"
+    },
+    {
+      "id": "elec-duplex-receptacle",
+      "name": "Duplex Receptacle",
+      "csiDivision": "26",
+      "csiDivisionName": "Electrical",
+      "category": "Wiring Devices",
+      "subcategory": "Receptacles",
+      "description": "One marker per duplex receptacle symbol. Count only — GFCI/dedicated/floor variants are not distinguished unless counted as separate takeoffs.",
+      "quantityType": "count",
+      "unit": "EA",
+      "style": {
+        "strokeColor": "#d6336c",
+        "fillColor": null,
+        "opacity": 1,
+        "lineStyle": "solid",
+        "lineWeight": 2,
+        "hatchPattern": null
+      },
+      "defaultLabel": "Receptacle"
+    },
+    {
+      "id": "elec-light-fixture",
+      "name": "Light Fixture",
+      "csiDivision": "26",
+      "csiDivisionName": "Electrical",
+      "category": "Lighting",
+      "subcategory": "Interior Lighting",
+      "description": "One marker per light fixture symbol. Count only — fixture type is not read from the fixture schedule.",
+      "quantityType": "count",
+      "unit": "EA",
+      "style": {
+        "strokeColor": "#f08c00",
+        "fillColor": null,
+        "opacity": 1,
+        "lineStyle": "solid",
+        "lineWeight": 2,
+        "hatchPattern": null
+      },
+      "defaultLabel": "Fixture"
     }
   ]
 }
